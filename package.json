@@ -1,0 +1,149 @@
+{
+  "name": "anvil",
+  "displayName": "Anvil — coding agent on TrueForge",
+  "description": "Editor-native coding agent for VS Code whose agent loop runs on TrueForge. Inline edits, agent mode with budgeted context retrieval, hunk-by-hunk diff review, streaming, cancellation and model fallback.",
+  "version": "0.1.0",
+  "publisher": "tokenisers",
+  "license": "MIT",
+  "private": true,
+  "repository": { "type": "git", "url": "https://github.com/Mqhnish/anvil" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["AI", "Programming Languages", "Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "anvil.inlineEdit", "title": "Anvil: Inline Edit Selection", "category": "Anvil" },
+      { "command": "anvil.openPanel", "title": "Anvil: Open Agent Panel", "category": "Anvil" },
+      { "command": "anvil.cancel", "title": "Anvil: Cancel Running Turn", "category": "Anvil" },
+      { "command": "anvil.selectModel", "title": "Anvil: Select Model", "category": "Anvil" },
+      { "command": "anvil.selectFallbackModel", "title": "Anvil: Select Fallback Model", "category": "Anvil" },
+      { "command": "anvil.startTrueForge", "title": "Anvil: Start TrueForge (local mode) in a terminal", "category": "Anvil" },
+      { "command": "anvil.registerWithTrueForge", "title": "Anvil: (Re)register workspace MCP server with TrueForge", "category": "Anvil" },
+      { "command": "anvil.review.acceptHunk", "title": "Accept hunk", "category": "Anvil" },
+      { "command": "anvil.review.rejectHunk", "title": "Reject hunk", "category": "Anvil" },
+      { "command": "anvil.review.acceptAll", "title": "Anvil: Accept All Hunks", "category": "Anvil", "icon": "$(check-all)" },
+      { "command": "anvil.review.rejectAll", "title": "Anvil: Reject All Hunks", "category": "Anvil", "icon": "$(close-all)" },
+      { "command": "anvil.review.finish", "title": "Anvil: Finish Review (apply accepted hunks)", "category": "Anvil", "icon": "$(pass-filled)" },
+      { "command": "anvil.undoLastApply", "title": "Anvil: Undo Last Applied Change", "category": "Anvil" },
+      { "command": "anvil.showContextPack", "title": "Anvil: Show Last Context Pack", "category": "Anvil" },
+      { "command": "anvil.openSessionInTrueForge", "title": "Anvil: Open Current Session in TrueForge UI", "category": "Anvil" }
+    ],
+    "keybindings": [
+      { "command": "anvil.inlineEdit", "key": "ctrl+alt+i", "mac": "ctrl+cmd+i", "when": "editorTextFocus" },
+      { "command": "anvil.openPanel", "key": "ctrl+alt+a", "mac": "ctrl+cmd+a" },
+      { "command": "anvil.cancel", "key": "escape", "when": "anvil.turnRunning && !editorHasSelection && !inlineSuggestionVisible" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "anvil", "title": "Anvil", "icon": "media/anvil.svg" }
+      ]
+    },
+    "views": {
+      "anvil": [
+        { "type": "webview", "id": "anvil.agentPanel", "name": "Agent" }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        { "command": "anvil.review.acceptAll", "group": "navigation@1", "when": "resourceScheme == anvil-proposed" },
+        { "command": "anvil.review.rejectAll", "group": "navigation@2", "when": "resourceScheme == anvil-proposed" },
+        { "command": "anvil.review.finish", "group": "navigation@3", "when": "resourceScheme == anvil-proposed" }
+      ],
+      "commandPalette": [
+        { "command": "anvil.review.acceptHunk", "when": "false" },
+        { "command": "anvil.review.rejectHunk", "when": "false" }
+      ]
+    },
+    "configuration": {
+      "title": "Anvil",
+      "properties": {
+        "anvil.trueforge.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:8790",
+          "description": "Base URL of the TrueForge server (local mode: npx @truefoundry/trueforge@latest)."
+        },
+        "anvil.trueforge.token": {
+          "type": "string",
+          "default": "",
+          "description": "Optional ID token when TrueForge runs with OIDC login enabled. Leave empty for local mode."
+        },
+        "anvil.model.primary": {
+          "type": "string",
+          "default": "",
+          "description": "Primary model FQN as configured in TrueForge (provider/model), e.g. openai/gpt-4.1-mini. Use 'Anvil: Select Model' to pick from the models TrueForge has configured."
+        },
+        "anvil.model.fallback": {
+          "type": "string",
+          "default": "",
+          "description": "Fallback model FQN. When the primary model fails (unreachable endpoint, invalid key, 5xx after retries) Anvil re-runs the request on this model automatically."
+        },
+        "anvil.resilience.maxRetries": {
+          "type": "number",
+          "default": 2,
+          "description": "Retries with exponential backoff on model/transport errors before falling back."
+        },
+        "anvil.context.budgetTokens": {
+          "type": "number",
+          "default": 12000,
+          "description": "Token budget for the automatically assembled context pack (assemble_context tool)."
+        },
+        "anvil.context.maxFiles": {
+          "type": "number",
+          "default": 4000,
+          "description": "Maximum number of workspace files to index for retrieval."
+        },
+        "anvil.mcp.port": {
+          "type": "number",
+          "default": 0,
+          "description": "Port for the workspace MCP server that TrueForge calls back into (0 = pick a free port)."
+        },
+        "anvil.mcp.serverName": {
+          "type": "string",
+          "default": "vscode-workspace",
+          "description": "Name under which the workspace MCP server is registered in TrueForge (Settings → Connectors)."
+        },
+        "anvil.agent.subagents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let the TrueForge harness spawn exploration subagents (dynamic_sub_agents)."
+        },
+        "anvil.agent.compactionTriggerTokens": {
+          "type": "number",
+          "default": 60000,
+          "description": "Input-token threshold at which TrueForge compacts the session history."
+        },
+        "anvil.agent.iterationLimit": {
+          "type": "number",
+          "default": 60,
+          "description": "Max agent-loop iterations per turn."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "lint": "tsc --noEmit -p . && echo typecheck ok",
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "e2e": "node dist/e2e.js --root ../flask",
+    "mock-model": "node scripts/mock-model.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@truefoundry/trueforge-sdk": "^0.185.0",
+    "diff": "^9.0.0",
+    "ignore": "^7.0.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/diff": "^8.0.0",
+    "@types/node": "^22.14.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0",
+    "vitest": "^5.1.0"
+  }
+}

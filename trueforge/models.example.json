@@ -1,0 +1,59 @@
+{
+  "$comment": "Example model-provider manifests for TrueForge (PUT /api/v1/settings/model-providers, or Settings → Models in the UI). Copy to models.local.json, fill in real keys, then: node trueforge/configure-models.mjs models.local.json. NEVER commit real keys — models.local.json is git-ignored.",
+  "providers": [
+    {
+      "manifest": {
+        "type": "openai",
+        "auth": { "api_key": "sk-REPLACE_ME" },
+        "models": [
+          { "name": "gpt-4-1-mini", "model_id": "gpt-4.1-mini", "properties": { "context_length": 1000000, "max_output_tokens": 32768 } },
+          { "name": "gpt-4-1", "model_id": "gpt-4.1", "properties": { "context_length": 1000000, "max_output_tokens": 32768 } }
+        ]
+      },
+      "$comment": "Anvil model FQN will be openai/gpt-4-1-mini"
+    },
+    {
+      "manifest": {
+        "type": "anthropic",
+        "auth": { "api_key": "sk-ant-REPLACE_ME" },
+        "models": [
+          { "name": "claude-sonnet-4-6", "model_id": "claude-sonnet-4-6", "properties": { "context_length": 200000, "max_output_tokens": 16384 } }
+        ]
+      }
+    },
+    {
+      "manifest": {
+        "type": "google-gemini",
+        "auth": { "api_key": "AIza-REPLACE_ME" },
+        "models": [
+          { "name": "gemini-2-5-flash", "model_id": "gemini-2.5-flash", "properties": { "context_length": 1000000, "max_output_tokens": 65536 } }
+        ]
+      },
+      "$comment": "Free tier available at aistudio.google.com — a good fallback model"
+    },
+    {
+      "manifest": {
+        "type": "custom",
+        "name": "ollama",
+        "base_url": "http://127.0.0.1:11434/v1",
+        "auth": { "api_key": "ollama" },
+        "models": [
+          { "name": "qwen2-5-coder-7b", "model_id": "qwen2.5-coder:7b", "properties": { "context_length": 32768, "max_output_tokens": 8192 } }
+        ]
+      },
+      "$comment": "Local model via Ollama's OpenAI-compatible endpoint. Needs OUTBOUND_URL_ALLOWED_HOSTS to include 127.0.0.1 (trueforge/start.sh does this)."
+    },
+    {
+      "manifest": {
+        "type": "custom",
+        "name": "mock",
+        "base_url": "http://127.0.0.1:8999/v1",
+        "auth": { "api_key": "mock-key" },
+        "models": [
+          { "name": "mock-coder", "model_id": "mock-coder", "properties": { "context_length": 128000, "max_output_tokens": 8192 } }
+        ]
+      },
+      "$comment": "The scripted mock model from scripts/mock-model.mjs — for tests and plumbing demos only"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+out/
+*.vsix
+.vscode-test/
+.DS_Store
+# never commit secrets: copy trueforge/models.example.json to models.local.json
+trueforge/models.local.json
+.env
+.env.*
+!.env.example
+/tmp/
+coverage/
