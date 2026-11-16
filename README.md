@@ -142,4 +142,4 @@ test/                      vitest unit tests
 
 ## Team
 
-Mohnish Singh Rawat (@Mqhnish) · Arnav Jain · Anay Sharma — Tokenisers. License: MIT.
+Mohnish Singh Rawat (@Mqhnish) · Arnav Jain (@arnavjain29) · Anay Sharma (@WgbCode7129) — Tokenisers, NTU. License: MIT.

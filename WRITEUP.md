@@ -5,9 +5,9 @@
 ## 1. Team
 
 Team **Tokenisers**
-- Mohnish Singh Rawat — [college] — GitHub @Mqhnish (team leader)
-- Arnav Jain — [college] — GitHub @[handle]
-- Anay Sharma — [college] — GitHub @[handle]
+- Mohnish Singh Rawat — NTU — GitHub @Mqhnish (team leader)
+- Arnav Jain — NTU — GitHub @arnavjain29
+- Anay Sharma — NTU — GitHub @WgbCode7129
 
 Repository: https://github.com/Mqhnish/anvil · Demo video: [link]
 
