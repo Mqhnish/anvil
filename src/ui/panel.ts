@@ -10,7 +10,7 @@ import { mentionCandidates } from '../context/mentions';
 export interface PanelDelegate {
   send(text: string): Promise<void>;
   cancel(): Promise<void>;
-  newChat(): void;
+  newChat(): boolean;
   openSession(): void;
   selectModel(): void;
   index(): RepoIndex | undefined;
@@ -53,7 +53,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
         case 'ready': for (const q of this.queue.splice(0)) view.webview.postMessage(q); this.post({ type: 'status', payload: this.delegate.status() }); break;
         case 'send': await this.delegate.send(String(m.text ?? '')); break;
         case 'cancel': await this.delegate.cancel(); break;
-        case 'newChat': this.delegate.newChat(); this.post({ type: 'reset' }); this.post({ type: 'status', payload: this.delegate.status() }); break;
+        case 'newChat': if (!this.delegate.newChat()) break; this.post({ type: 'reset' }); this.post({ type: 'status', payload: this.delegate.status() }); break;
         case 'openSession': this.delegate.openSession(); break;
         case 'selectModel': this.delegate.selectModel(); break;
         case 'openFile': {
@@ -74,7 +74,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
         case 'command': await vscode.commands.executeCommand(String(m.command)); break;
       }
     });
-    view.onDidDispose(() => { this.view = undefined; });
+    view.onDidDispose(() => { this.flushPending(); this.view = undefined; });
   }
 
   reveal(): void {

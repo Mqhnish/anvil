@@ -51,6 +51,7 @@ export interface EditBlock {
 }
 
 export interface ProposeEditRequest {
+  signal?: AbortSignal;
   /** workspace-relative path */
   path: string;
   /** Either a full replacement, or a list of search/replace blocks against the current content. */

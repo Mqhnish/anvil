@@ -35,16 +35,17 @@ class) and `run_command` `destructiveHint:true`, so TrueForge pauses with `tool.
 On that pause Anvil opens the hunk review; the user's decisions are stored keyed by *(path, hash(before), hash(after))*;
 Anvil answers `allow` (or `deny` with the reason when every hunk was rejected). When TrueForge then executes the tool,
 the MCP handler looks the decision up and applies **only the accepted hunks**, then reports to the model exactly which
-hunks were rejected so it does not retry them. Writes therefore happen only inside an approved tool call, atomically —
-which is also why cancellation can never leave a half-applied edit.
+hunks were rejected so it does not retry them. Writes happen per file after review, with a baseline check to avoid replacing intervening edits. Cancellation
+denies pending reviews and stops active commands; already accepted edits remain applied and can be undone.
+Retry and fallback stop after an accepted edit or command, so a failure cannot automatically replay side effects.
 
 **Harness features used and why.** *Deferred tool loading, selectively*: `preload_tools` eagerly loads the four tools
 used on nearly every turn (`assemble_context`, `read_file`, `search_workspace`, `propose_edit`); the other six are
 discovered on demand through TrueForge's meta tools, keeping the system prompt small. *Dynamic sub-agents* are on and
 the instructions tell the agent to delegate read-heavy, small-answer sub-tasks (e.g. "find every caller of X") so raw
 file contents stay out of the main context. *Compaction* is configured with an explicit 60k input-token trigger so
-long agent runs on a 17k-line repo keep working. Sandbox, web search and generative UI are off: the editor is the
-sandbox. [Confirm what was visible in the recorded session and cite the timestamp.]
+long agent runs on a 17k-line repo keep working. Sandbox, web search and generative UI are off. File tools constrain paths to the workspace;
+user-approved shell commands run on the host and are not isolated by an OS sandbox. [Confirm what was visible in the recorded session and cite the timestamp.]
 
 ## 4. How context is selected
 
@@ -107,6 +108,10 @@ Claude Code (Opus) was used extensively to write and test the extension; TrueFor
 VS Code Extension API docs; `pallets/flask` 3.1.3 as the fixed repository. [Add anything else.]
 
 ## 8. Known limitations and the next month
+
+Automated verification on 18 November: 49 tests, typecheck, build, and all five TrueForge/mock-model
+end-to-end scenarios passed. See `docs/TESTLOG.md`. Actual VS Code UI interaction and real-model Tasks A/B/C
+remain unverified; video links and scorecard timestamps above must be filled from the recording.
 
 - Retrieval is lexical; a hybrid with a small local embedding index over the same symbol chunks is the obvious next
   step, keeping the per-file reasons.

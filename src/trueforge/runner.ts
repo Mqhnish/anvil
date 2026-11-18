@@ -7,9 +7,9 @@
  *
  * Invariants the judges look for:
  *   - the editor never blocks: everything here is async, UI updates are callbacks.
- *   - cancellation is immediate: `cancel()` calls sessions.cancel and the stream drains to turn.done.
- *   - the workspace is never left half-edited: writes happen only inside an approved propose_edit tool
- *     call, which applies a complete, user-reviewed set of hunks atomically.
+ *   - cancellation aborts local waits/reviews immediately and requests sessions.cancel.
+ *   - each file receives its reviewed hunks in one apply operation. Accepted changes remain on cancellation;
+ *     retries and fallback are disabled after an edit or command to avoid replaying side effects.
  */
 import { isEventDelta, mergeEventDelta, type TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import type { TrueForgeConnection } from './client';
@@ -74,17 +74,23 @@ export class TurnRunner {
 
   async cancel(): Promise<void> {
     this.cancelRequested = true;
+    this.o.decisions.cancelTurn();
     const sid = this.activeSessionIdForCancel ?? this.sessionId;
-    if (sid) {
-      try { await this.o.conn.client.sessions.cancel(sid); } catch (e) { this.o.host.log(`[runner] cancel: ${describeError(e)}`); }
-    }
+    this.resetSession();
     this.o.callbacks.onStatus?.('cancelling…');
+    if (sid) {
+      try { await withTimeout(this.o.conn.client.sessions.cancel(sid), 4000); } catch (e) { this.o.host.log(`[runner] cancel: ${describeError(e)}`); }
+    }
   }
 
-  private async ensureSession(model: string): Promise<string> {
+  private async ensureSession(model: string, signal: AbortSignal): Promise<string> {
     if (this.sessionId && this.sessionModel === model) return this.sessionId;
     const spec = buildAgentSpec({ ...this.o.spec, model });
     const { data } = await this.o.conn.client.sessions.create({ agent: { spec } });
+    if (signal.aborted) {
+      void this.o.conn.client.sessions.cancel(data.id).catch(() => {});
+      throw new Error('cancelled');
+    }
     this.sessionId = data.id;
     this.sessionModel = model;
     this.o.callbacks.onSession?.(data.id, model);
@@ -100,6 +106,8 @@ export class TurnRunner {
     if (this.running) throw new Error('a turn is already running');
     this.running = true;
     this.cancelRequested = false;
+    this.o.decisions.beginTurn();
+    const signal = this.o.decisions.signal;
     const cb = this.o.callbacks;
     const models = [this.o.primaryModel, ...(this.o.fallbackModel && this.o.fallbackModel !== this.o.primaryModel ? [this.o.fallbackModel] : [])];
     let attempts = 0;
@@ -121,20 +129,23 @@ export class TurnRunner {
           if (attempt > 0) {
             const delay = 800 * 2 ** (attempt - 1);
             cb.onStatus?.(`model error — retry ${attempt}/${this.o.maxRetries} in ${delay}ms (${lastError})`);
-            await sleep(delay);
+            await untilCancelled(sleep(delay), signal).catch(() => {});
             if (this.cancelRequested) return { status: 'cancelled', modelUsed: model, usedFallback, attempts, sessionId: this.sessionId };
           }
           try {
-            const sid = await this.ensureSession(model);
+            const sid = await untilCancelled(this.ensureSession(model, signal), signal);
             this.activeSessionIdForCancel = sid;
-            const r = await this.executeTurn(sid, userText);
+            const r = await untilCancelled(this.executeTurn(sid, userText, signal), signal);
             if (r.status === 'done') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             if (r.status === 'cancelled') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             lastError = r.message ?? 'unknown error';
+            if (this.o.decisions.hasSideEffects) return { status: 'error', message: `The turn failed after an accepted edit or command: ${lastError}. Previously accepted changes remain applied. Review your workspace before retrying.`, modelUsed: model, usedFallback, attempts, sessionId: sid };
             if (!isRetryable(lastError)) break; // e.g. iteration limit: no point retrying
             this.o.host.log(`[runner] turn error on ${model}: ${lastError}`);
           } catch (e) {
+            if (signal.aborted) return { status: 'cancelled', modelUsed: model, usedFallback, attempts };
             lastError = describeError(e);
+            if (this.o.decisions.hasSideEffects) return { status: 'error', message: `The turn failed after an accepted edit or command: ${lastError}. Previously accepted changes remain applied. Review your workspace before retrying.`, modelUsed: model, usedFallback, attempts, sessionId: this.sessionId };
             this.o.host.log(`[runner] exception on ${model}: ${lastError}`);
             if (isTrueForgeUnreachable(e)) {
               // TrueForge itself is down: no model will help; fail fast with a clear message.
@@ -146,16 +157,17 @@ export class TurnRunner {
         }
       }
       const tried = models.length > 1 ? `Tried ${models.join(' then ')}.` : `Model: ${models[0]}. Configure anvil.model.fallback for automatic failover.`;
-      return { status: 'error', message: `The model is unavailable: ${lastError}. ${tried} No files were changed.`, modelUsed: models[models.length - 1], usedFallback: models.length > 1, attempts, sessionId: this.sessionId };
+      return { status: 'error', message: `The model is unavailable: ${lastError}. ${tried} This turn did not apply edits or run commands.`, modelUsed: models[models.length - 1], usedFallback: models.length > 1, attempts, sessionId: this.sessionId };
     } finally {
       this.running = false;
       this.activeSessionIdForCancel = undefined;
+      this.o.decisions.clear();
       if (savedSession) { this.sessionId = savedSession.id; this.sessionModel = savedSession.model; }
     }
   }
 
   /** One turn on an existing session, including every pause/resume cycle. */
-  private async executeTurn(sessionId: string, userText: string): Promise<{ status: 'done' | 'cancelled' | 'error'; message?: string; output?: string }> {
+  private async executeTurn(sessionId: string, userText: string, signal: AbortSignal): Promise<{ status: 'done' | 'cancelled' | 'error'; message?: string; output?: string }> {
     const { client } = this.o.conn;
     this.events.clear();
     this.announced.clear();
@@ -167,6 +179,7 @@ export class TurnRunner {
 
     const consume = async (stream: AsyncIterable<Ev>): Promise<'paused' | { status: 'done' | 'cancelled' | 'error'; message?: string; output?: string }> => {
       for await (const ev of stream) {
+        if (signal.aborted) return { status: 'cancelled' };
         lastEventId = ev.id;
         this.o.callbacks.onEvent?.(ev);
         if (ev.type === 'turn.created') turnId = ev.turnId;
@@ -204,6 +217,7 @@ export class TurnRunner {
 
     let resubscribes = 0;
     while (r === 'paused') {
+      if (signal.aborted) return { status: 'cancelled' };
       if (!turnId) return { status: 'error', message: 'stream ended before the turn was created' };
       if (this.cancelRequested) {
         await client.sessions.cancel(sessionId).catch(() => {});
@@ -211,11 +225,17 @@ export class TurnRunner {
       const answers: TrueForgeApi.TurnUserEventMessage[] = [];
       if (pendingApprovals.length) {
         this.o.callbacks.onStatus?.('waiting for your review…');
-        for (const p of pendingApprovals) for (const ref of p.toolCalls) answers.push(await this.decideApproval(p.threadId, ref));
+        for (const p of pendingApprovals) for (const ref of p.toolCalls) {
+          if (signal.aborted) return { status: 'cancelled' };
+          answers.push(await this.decideApproval(p.threadId, ref, signal));
+        }
         pendingApprovals = [];
       }
       if (pendingResponses.length) {
-        for (const p of pendingResponses) for (const ref of p.toolCalls) answers.push(await this.answerToolResponse(p.threadId, ref));
+        for (const p of pendingResponses) for (const ref of p.toolCalls) {
+          if (signal.aborted) return { status: 'cancelled' };
+          answers.push(await untilCancelled(this.answerToolResponse(p.threadId, ref), signal));
+        }
         pendingResponses = [];
       }
       if (pendingAuth.length) {
@@ -224,7 +244,9 @@ export class TurnRunner {
         pendingAuth = [];
       }
       // Subscribe first, then send answers, then read what they produce.
+      if (signal.aborted) return { status: 'cancelled' };
       const resume = await client.sessions.subscribeToTurn(sessionId, turnId, { afterEventId: lastEventId }, { timeoutInSeconds: 600 });
+      if (signal.aborted) return { status: 'cancelled' };
       if (answers.length) await client.sessions.createTurnEvents(sessionId, turnId, { events: answers });
       else if (++resubscribes > 20) return { status: 'error', message: 'stream kept disconnecting' };
       this.o.callbacks.onStatus?.('thinking…');
@@ -246,7 +268,7 @@ export class TurnRunner {
   }
 
   /** Resolve a pending approval by running the editor-side review for the tool call. */
-  private async decideApproval(threadId: string, ref: TrueForgeApi.ToolCallRef): Promise<TrueForgeApi.TurnUserEventMessage> {
+  private async decideApproval(threadId: string, ref: TrueForgeApi.ToolCallRef, signal: AbortSignal): Promise<TrueForgeApi.TurnUserEventMessage> {
     const allow = (): TrueForgeApi.TurnUserEventMessage => ({ type: 'user.tool_approval', threadId, toolCallId: ref.id, approval: { status: 'allow' } });
     const deny = (reason: string): TrueForgeApi.TurnUserEventMessage => ({ type: 'user.tool_approval', threadId, toolCallId: ref.id, approval: { status: 'deny', reason } });
     if (this.cancelRequested) return deny('cancelled by user');
@@ -265,7 +287,8 @@ export class TurnRunner {
         } else if (a.new_content !== undefined) proposed = a.new_content;
         else return allow();
         if (proposed === oldContent) return allow();
-        const outcome = await this.o.host.reviewEdit({ path: a.path, newContent: proposed, summary: a.summary, toolCallId: ref.id }, { oldContent, newContent: proposed });
+        const outcome = await untilCancelled(this.o.host.reviewEdit({ path: a.path, newContent: proposed, summary: a.summary, toolCallId: ref.id, signal }, { oldContent, newContent: proposed }), signal);
+        if (signal.aborted) return deny('cancelled by user');
         if (outcome.decision === 'deny') return deny(`User rejected all hunks for ${a.path}${outcome.reason ? ': ' + outcome.reason : ''}. Do not retry the same change.`);
         const set = computeHunks(oldContent, proposed);
         const accepted = new Set(outcome.decisions.filter(d => d.accepted).map(d => d.index));
@@ -278,9 +301,10 @@ export class TurnRunner {
       if (name === TOOL_NAMES.runCommand) {
         const a = args as { command: string; cwd?: string };
         const ask = this.o.callbacks.onCommandApproval ?? ((c, w) => this.o.host.confirmCommand(c, w));
-        const res = await ask(a.command, a.cwd);
+        const res = await untilCancelled(ask(a.command, a.cwd), signal);
+        if (signal.aborted) return deny('cancelled by user');
         if (!res.allow) return deny(`User declined to run "${a.command}"${res.reason ? ': ' + res.reason : ''}`);
-        this.o.decisions.approveCommand(a.command);
+        this.o.decisions.approveCommand(a.command, a.cwd);
         return allow();
       }
       // Anything else that is gated: ask generically.
@@ -343,3 +367,19 @@ function isRetryable(msg: string): boolean {
 }
 
 function sleep(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)); }
+
+function untilCancelled<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error('cancelled by user'));
+    if (signal.aborted) { promise.catch(() => {}); abort(); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(undefined), ms);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}

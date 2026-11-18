@@ -23,6 +23,14 @@ export function decisionKey(path: string, baseline: string, proposed: string): s
 }
 
 export class DecisionStore {
+  private controller = new AbortController();
+  private effects = 0;
+  get hasSideEffects(): boolean { return this.effects > 0; }
+  recordSideEffect(): void { this.effects++; }
+  get signal(): AbortSignal { return this.controller.signal; }
+  beginTurn(): void { this.clear(); this.effects = 0; this.controller = new AbortController(); }
+  cancelTurn(): void { this.controller.abort(); this.clear(); }
+  clear(): void { this.byKey.clear(); this.approvedCommands.clear(); }
   private readonly byKey = new Map<string, StoredDecision>();
   private readonly ttlMs: number;
 
@@ -43,18 +51,20 @@ export class DecisionStore {
   }
 
   peek(key: string): StoredDecision | undefined {
+    this.gc();
     return this.byKey.get(key);
   }
 
   // Commands approved during TrueForge's approval pause, so the MCP handler does not ask twice.
   private readonly approvedCommands = new Map<string, number>();
 
-  approveCommand(command: string): void { this.approvedCommands.set(command, Date.now()); }
+  approveCommand(command: string, cwd?: string): void { this.approvedCommands.set(JSON.stringify([command, cwd ?? '.']), Date.now()); }
 
-  takeCommandApproval(command: string): boolean {
-    const t = this.approvedCommands.get(command);
+  takeCommandApproval(command: string, cwd?: string): boolean {
+    const key = JSON.stringify([command, cwd ?? '.']);
+    const t = this.approvedCommands.get(key);
     if (t === undefined) return false;
-    this.approvedCommands.delete(command);
+    this.approvedCommands.delete(key);
     return Date.now() - t < this.ttlMs;
   }
 

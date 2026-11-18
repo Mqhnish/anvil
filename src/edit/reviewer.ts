@@ -103,8 +103,9 @@ export class HunkReviewer implements vscode.TextDocumentContentProvider, vscode.
   }
 
   /** Open the review and wait for the user's decisions. */
-  async review(absPath: string, relPath: string, oldContent: string, newContent: string, summary?: string, token?: vscode.CancellationToken): Promise<ReviewOutcome> {
+  async review(absPath: string, relPath: string, oldContent: string, newContent: string, summary?: string, signal?: AbortSignal): Promise<ReviewOutcome> {
     const set = computeHunks(oldContent, newContent);
+    if (signal?.aborted) return { decision: 'deny', decisions: [], key: decisionKey(relPath, oldContent, newContent), reason: 'review cancelled' };
     const key = decisionKey(relPath, oldContent, newContent);
     if (!set.hunks.length) return { decision: 'deny', decisions: [], key, reason: 'no changes' };
     const id = `r${++this.seq}`;
@@ -117,7 +118,11 @@ export class HunkReviewer implements vscode.TextDocumentContentProvider, vscode.
       const r: ActiveReview = { id, path: relPath, absPath, summary, set, decisions: new Map(set.hunks.map(h => [h.index, undefined])), resolve, proposedUri, originalUri: leftUri, finished: false };
       this.reviews.set(id, r);
       this.onReviewOpen?.(relPath, set.hunks.length);
-      token?.onCancellationRequested(() => this.finish(id, true));
+      const abort = () => this.finish(id, true);
+      signal?.addEventListener('abort', abort, { once: true });
+      const originalResolve = r.resolve;
+      r.resolve = outcome => { signal?.removeEventListener('abort', abort); originalResolve(outcome); };
+      if (signal?.aborted) { abort(); return; }
       const title = `${relPath}: ${exists ? 'current' : '(new file)'} ⟷ Anvil proposal (${set.hunks.length} hunk${set.hunks.length === 1 ? '' : 's'})`;
       void vscode.commands.executeCommand('vscode.diff', leftUri, proposedUri, title, { preview: false, viewColumn: vscode.ViewColumn.Active })
         .then(() => { this._onDidChangeCodeLenses.fire(); setTimeout(() => this.refreshDecorations(), 150); }, (e: unknown) => {
@@ -199,26 +204,27 @@ export class HunkReviewer implements vscode.TextDocumentContentProvider, vscode.
 
 /** Undo stack for applied edits (in addition to the editor's native Cmd+Z). */
 export class ApplyHistory {
-  private readonly stack: { absPath: string; before: string; after: string; at: number }[] = [];
-  push(absPath: string, before: string, after: string): void { this.stack.push({ absPath, before, after, at: Date.now() }); if (this.stack.length > 50) this.stack.shift(); }
-  pop(): { absPath: string; before: string; after: string; at: number } | undefined { return this.stack.pop(); }
+  private readonly stack: { absPath: string; before: string; after: string; created: boolean; at: number }[] = [];
+  push(absPath: string, before: string, after: string, created = false): void { this.stack.push({ absPath, before, after, created, at: Date.now() }); if (this.stack.length > 50) this.stack.shift(); }
+  pop(): { absPath: string; before: string; after: string; created: boolean; at: number } | undefined { return this.stack.pop(); }
   get size(): number { return this.stack.length; }
 }
 
 /** Replace the full text of a file through a WorkspaceEdit so it is undoable and visible in open editors. */
-export async function applyFullText(absPath: string, newText: string, create: boolean): Promise<void> {
+export async function applyFullText(absPath: string, newText: string, create: boolean, expected?: string): Promise<void> {
   const uri = vscode.Uri.file(absPath);
   const edit = new vscode.WorkspaceEdit();
   if (create) {
-    edit.createFile(uri, { overwrite: false, ignoreIfExists: true });
+    edit.createFile(uri, { overwrite: false, ignoreIfExists: false });
     edit.insert(uri, new vscode.Position(0, 0), newText);
   } else {
     const doc = await vscode.workspace.openTextDocument(uri);
+    if (expected !== undefined && doc.getText() !== expected) throw new Error(`${absPath} changed before the edit could be applied; re-read it and review again`);
     const full = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
     edit.replace(uri, full, newText);
   }
   const ok = await vscode.workspace.applyEdit(edit);
   if (!ok) throw new Error(`workspace edit rejected for ${absPath}`);
   const doc = await vscode.workspace.openTextDocument(uri);
-  if (doc.isDirty) await doc.save();
+  if (doc.isDirty && !(await doc.save())) throw new Error(`could not save ${absPath}; the edit remains in the editor buffer`);
 }

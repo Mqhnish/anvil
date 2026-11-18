@@ -4,7 +4,8 @@
  */
 import * as vscode from 'vscode';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { resolveWorkspacePath, isInsideWorkspace } from './paths';
+import { executeCommand } from './commands';
 import ignore from 'ignore';
 import type { WorkspaceHost, FileStat, DirEntry, SymbolInfo, Diagnostic, CommandResult, ProposeEditRequest, ReviewOutcome } from './types';
 import { outlineFile } from '../context/outline';
@@ -28,9 +29,7 @@ export class VsCodeHost implements WorkspaceHost {
   }
 
   private abs(rel: string): string {
-    const p = path.resolve(this.rootPath, rel);
-    if (!p.startsWith(this.rootPath)) throw new Error(`path escapes workspace: ${rel}`);
-    return p;
+    return resolveWorkspacePath(this.rootPath, rel);
   }
   private rel(abs: string): string { return toPosix(path.relative(this.rootPath, abs)); }
 
@@ -86,7 +85,7 @@ export class VsCodeHost implements WorkspaceHost {
     const all = rel ? [[vscode.Uri.file(this.abs(rel)), vscode.languages.getDiagnostics(vscode.Uri.file(this.abs(rel)))] as const] : vscode.languages.getDiagnostics();
     const out: Diagnostic[] = [];
     for (const [uri, diags] of all) {
-      if (!uri.fsPath.startsWith(this.rootPath)) continue;
+      if (!isInsideWorkspace(this.rootPath, uri.fsPath)) continue;
       for (const d of diags) out.push({ path: this.rel(uri.fsPath), line: d.range.start.line + 1, severity: (['error', 'warning', 'info', 'hint'] as const)[d.severity], message: d.message, source: d.source });
     }
     return out;
@@ -98,7 +97,7 @@ export class VsCodeHost implements WorkspaceHost {
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
         const input = tab.input as { uri?: vscode.Uri } | undefined;
-        if (!input?.uri || input.uri.scheme !== 'file' || !input.uri.fsPath.startsWith(this.rootPath)) continue;
+        if (!input?.uri || input.uri.scheme !== 'file' || !isInsideWorkspace(this.rootPath, input.uri.fsPath)) continue;
         const isActive = active?.document.uri.fsPath === input.uri.fsPath;
         const sel = isActive && active && !active.selection.isEmpty ? { startLine: active.selection.start.line + 1, endLine: active.selection.end.line + 1 } : undefined;
         out.push({ path: this.rel(input.uri.fsPath), active: isActive, selection: sel });
@@ -108,28 +107,18 @@ export class VsCodeHost implements WorkspaceHost {
   }
 
   runCommand(command: string, opts: { cwd?: string; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<CommandResult> {
-    const t0 = Date.now();
-    return new Promise(resolve => {
-      const child = spawn(command, { shell: true, cwd: opts.cwd ? this.abs(opts.cwd) : this.rootPath, env: { ...process.env, TERM: 'dumb', NO_COLOR: '1' } });
-      let stdout = '', stderr = '', timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, opts.timeoutMs ?? 120000);
-      child.stdout.on('data', d => { stdout += d; if (stdout.length > 200000) stdout = stdout.slice(-200000); });
-      child.stderr.on('data', d => { stderr += d; if (stderr.length > 100000) stderr = stderr.slice(-100000); });
-      opts.signal?.addEventListener('abort', () => child.kill('SIGKILL'));
-      child.on('error', e => { clearTimeout(timer); resolve({ exitCode: null, stdout, stderr: stderr + '\n' + e.message, timedOut, durationMs: Date.now() - t0 }); });
-      child.on('close', code => { clearTimeout(timer); resolve({ exitCode: code, stdout, stderr, timedOut, durationMs: Date.now() - t0 }); });
-    });
+    return executeCommand(command, opts.cwd ? this.abs(opts.cwd) : this.rootPath, opts);
   }
 
   async reviewEdit(req: ProposeEditRequest, prev: { oldContent: string; newContent: string }): Promise<ReviewOutcome> {
-    return this.reviewer.review(this.abs(req.path), req.path, prev.oldContent, prev.newContent, req.summary);
+    return this.reviewer.review(this.abs(req.path), req.path, prev.oldContent, prev.newContent, req.summary, req.signal);
   }
 
   async applyEdit(rel: string, oldContent: string, resulting: string): Promise<void> {
     const abs = this.abs(rel);
     const exists = await this.fileExists(rel);
-    await applyFullText(abs, resulting, !exists);
-    this.history.push(abs, oldContent, resulting);
+    await applyFullText(abs, resulting, !exists, oldContent);
+    this.history.push(abs, oldContent, resulting, !exists);
     vscode.commands.executeCommand('setContext', 'anvil.canUndo', true);
   }
 
@@ -138,13 +127,23 @@ export class VsCodeHost implements WorkspaceHost {
     if (!last) return undefined;
     const uri = vscode.Uri.file(last.absPath);
     const exists = await vscode.workspace.fs.stat(uri).then(() => true, () => false);
-    if (!exists) { await applyFullText(last.absPath, last.before, true); return this.rel(last.absPath); }
-    const current = await this.readFile(this.rel(last.absPath));
-    if (current !== last.after) {
+    const current = exists ? await this.readFile(this.rel(last.absPath)) : undefined;
+    if ((exists && current !== last.after) || (!exists && !last.created)) {
       const pick = await vscode.window.showWarningMessage(`${this.rel(last.absPath)} changed since Anvil applied it. Restore the pre-Anvil content anyway?`, { modal: true }, 'Restore');
-      if (pick !== 'Restore') { this.history.push(last.absPath, last.before, last.after); return undefined; }
+      if (pick !== 'Restore') { this.history.push(last.absPath, last.before, last.after, last.created); return undefined; }
     }
-    await applyFullText(last.absPath, last.before, false);
+    try {
+      if (last.created) {
+        if (exists) {
+          const edit = new vscode.WorkspaceEdit();
+          edit.deleteFile(uri);
+          if (!(await vscode.workspace.applyEdit(edit))) throw new Error(`could not remove ${last.absPath}`);
+        }
+      } else await applyFullText(last.absPath, last.before, !exists);
+    } catch (e) {
+      this.history.push(last.absPath, last.before, last.after, last.created);
+      throw e;
+    }
     vscode.commands.executeCommand('setContext', 'anvil.canUndo', this.history.size > 0);
     return this.rel(last.absPath);
   }

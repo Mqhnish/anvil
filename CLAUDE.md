@@ -38,9 +38,9 @@ Always run `npm run typecheck && npm test` before committing; run `npm run e2e` 
 - `src/host/` — `WorkspaceHost` interface with `VsCodeHost` and `HeadlessHost`; everything above the host is testable
   without VS Code (`dist/headless.js`, `dist/e2e.js`).
 
-## Current state (16 Nov 2026)
+## Current state (18 Nov 2026)
 Working and verified headlessly: TrueForge session/turn streaming, MCP registration + tool calls, approval-driven
-per-hunk review path, retry + fallback, clear-error path, cancellation. Unit tests: 25 passing. Not yet verified by a
+per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 49 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Not yet verified by a
 human inside VS Code: the HunkReviewer UX (CodeLens placement, decorations, tab closing), the webview panel, the inline
 edit keybinding on macOS, status bar. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
 

@@ -72,7 +72,7 @@ Two variants; the rubric's top anchor is automatic fallback, so show that, and m
    git status            # no files changed if rejected
    ```
 4. Optional 10 s: remove the fallback (`Anvil: Select Fallback Model → (none)`), repeat: clear error toast
-   "The model is unavailable … No files were changed.", `git status` clean.
+   "The model is unavailable … This turn did not apply edits or run commands.", `git status` clean.
 
 ## After recording
 

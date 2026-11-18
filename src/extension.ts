@@ -19,7 +19,7 @@ import { VsCodeHost } from './host/vscodeHost';
 import { AgentPanel } from './ui/panel';
 import { runInlineEdit } from './edit/inlineEdit';
 import { renderPack } from './context/retriever';
-import { stripMentionSigils } from './context/mentions';
+import { isInsideWorkspace } from './host/paths';
 
 interface Services {
   host: VsCodeHost;
@@ -98,7 +98,15 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       },
     },
   });
-  let runner = makeRunner();
+  const runner = makeRunner();
+  let configurationDirty = false;
+  function refreshConfiguration(): void {
+    if (!configurationDirty || svc.runner.isRunning) return;
+    Object.assign(conn, createClient(cfg('trueforge.baseUrl', 'http://localhost:8790'), cfg('trueforge.token', '')));
+    svc.runner = makeRunner();
+    svc.registered = false;
+    configurationDirty = false;
+  }
 
   const svc: Services = { host, index, decisions, mcp, conn, runner, panel: undefined as unknown as AgentPanel, reviewer, status, trueforgeState: 'checking…', registered: false };
   services = svc;
@@ -106,7 +114,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   panel = new AgentPanel(ctx, {
     send: text => sendMessage(text),
     cancel: () => cancelTurn(),
-    newChat: () => svc.runner.resetSession(),
+    newChat: () => { if (svc.runner.isRunning) return false; svc.runner.resetSession(); return true; },
     openSession: () => openSession(),
     selectModel: () => vscode.commands.executeCommand('anvil.selectModel'),
     index: () => index,
@@ -118,15 +126,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider('anvil.agentPanel', panel, { webviewOptions: { retainContextWhenHidden: true } }));
 
   // --- commands -----------------------------------------------------------------------------------------------
-  const setRunning = (r: boolean) => { void vscode.commands.executeCommand('setContext', 'anvil.turnRunning', r); updateStatus(); };
+  const setRunning = (r: boolean) => { void vscode.commands.executeCommand('setContext', 'anvil.turnRunning', r); updateStatus(r); };
   async function sendMessage(text: string): Promise<void> {
     if (!text.trim()) return;
     if (svc.runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running.'); return; }
     if (!(await preflight())) return;
+    if (svc.runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running.'); return; }
     panel.post({ type: 'user', text });
     setRunning(true);
     try {
-      const r = await svc.runner.run(stripMentionSigils(text).trim() === text.trim() ? text : text /* keep @ for assemble_context */);
+      const r = await svc.runner.run(text);
       panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts });
       if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
     } catch (e) {
@@ -140,16 +149,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   async function cancelTurn(): Promise<void> {
     if (!svc.runner.isRunning) return;
-    await svc.runner.cancel();
     panel.flushPending();
+    await svc.runner.cancel();
   }
   function openSession(): void {
     const sid = svc.runner.currentSessionId;
     void vscode.env.openExternal(vscode.Uri.parse(sid ? `${conn.baseUrl}/sessions/${sid}` : `${conn.baseUrl}/sessions`));
   }
-  function updateStatus(): void {
+  function updateStatus(runningOverride?: boolean): void {
     const model = cfg('model.primary', '');
-    const running = svc.runner.isRunning;
+    const running = runningOverride ?? svc.runner.isRunning;
     status.text = running ? '$(sync~spin) Anvil' : svc.registered ? '$(tools) Anvil' : '$(warning) Anvil';
     status.tooltip = `TrueForge: ${svc.trueforgeState}\nModel: ${model || '(not set)'}\nFallback: ${cfg('model.fallback', '') || '(none)'}\nMCP: ${mcp.url}`;
     status.show();
@@ -157,6 +166,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   /** Make sure TrueForge is reachable, our MCP server is registered, and a model is chosen. */
   async function preflight(): Promise<boolean> {
+    refreshConfiguration();
     const p = await ping(conn);
     svc.trueforgeState = p.ok ? 'ok' : 'unreachable';
     if (!p.ok) {
@@ -178,7 +188,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     if (!cfg('model.primary', '')) {
       await vscode.commands.executeCommand('anvil.selectModel');
       if (!cfg('model.primary', '')) return false;
-      svc.runner = runner = makeRunner();
+      configurationDirty = true; refreshConfiguration();
     }
     svc.trueforgeState = 'ok';
     panel.status();
@@ -210,11 +220,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       await vscode.window.showTextDocument(doc, { preview: true });
     }),
     vscode.commands.registerCommand('anvil.openSessionInTrueForge', () => openSession()),
-    vscode.workspace.onDidSaveTextDocument(doc => { if (doc.uri.fsPath.startsWith(folder.uri.fsPath)) void index.touch(toRel(doc.uri.fsPath)); }),
+    vscode.workspace.onDidSaveTextDocument(doc => { if (isInsideWorkspace(folder.uri.fsPath, doc.uri.fsPath)) void index.touch(toRel(doc.uri.fsPath)); }),
     vscode.workspace.onDidCreateFiles(() => void index.refresh()),
     vscode.workspace.onDidDeleteFiles(() => void index.refresh()),
     vscode.workspace.onDidRenameFiles(() => void index.refresh()),
-    vscode.workspace.onDidChangeConfiguration(e => { if (e.affectsConfiguration('anvil')) { svc.runner = runner = makeRunner(); svc.registered = false; panel.status(); updateStatus(); } }),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (!e.affectsConfiguration('anvil')) return;
+      configurationDirty = true; refreshConfiguration();
+      if (e.affectsConfiguration('anvil.mcp.port')) void vscode.window.showInformationMessage('Anvil: reload the window to use the new MCP port.', 'Reload window').then(pick => { if (pick) void vscode.commands.executeCommand('workbench.action.reloadWindow'); });
+      panel.status(); updateStatus();
+    }),
   );
   const rootFs = folder.uri.fsPath;
   function toRel(abs: string): string { return abs.slice(rootFs.length + 1).replace(/\\/g, '/'); }
@@ -234,7 +249,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     const pick = await vscode.window.showQuickPick(items, { title, placeHolder: 'Models configured in TrueForge' });
     if (!pick) return;
     await vscode.workspace.getConfiguration('anvil').update(key, pick.label === '(none)' ? '' : pick.label, vscode.ConfigurationTarget.Workspace);
-    svc.runner = runner = makeRunner();
+    configurationDirty = true; refreshConfiguration();
     panel.status();
     updateStatus();
   }
@@ -254,6 +269,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 }
 
 export async function deactivate(): Promise<void> {
+  services?.panel.flushPending();
+  if (services?.runner.isRunning) await services.runner.cancel();
   await services?.mcp.stop();
   services = undefined;
 }

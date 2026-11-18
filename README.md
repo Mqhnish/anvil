@@ -37,11 +37,12 @@ assembly) and keeps the editor safe (hunk-by-hunk review, undo, cancellation, mo
 | 2 | **Agent mode** | `src/ui/panel.ts`, `src/trueforge/runner.ts` | Panel in the Anvil activity bar; one request drives a TrueForge tool loop until done. Files are discovered, never named |
 | 3 | **Context assembly** | `src/context/*` | `@file`/`@symbol` mentions + automatic retrieval (BM25 over symbol chunks, path/symbol-name match, open editors, test/doc/import neighbours) packed under a token budget, with a *reason per file* shown in the panel |
 | 4 | **Diff review** | `src/edit/reviewer.ts`, `hunks.ts` | Native diff editor + CodeLens per hunk; nothing is written until *Finish review*; applied via `WorkspaceEdit` (Cmd+Z) plus `Anvil: Undo Last Applied Change` |
-| 5 | **Streaming & cancellation** | `runner.ts` | SSE deltas rendered as they arrive; `Esc`/Cancel calls `sessions.cancel`; writes happen only inside an approved tool call, so a cancelled run never leaves half-applied edits |
+| 5 | **Streaming & cancellation** | `runner.ts` | SSE deltas rendered as they arrive; `Esc`/Cancel calls `sessions.cancel`; writes happen only inside an approved tool call, pending reviews are denied and running commands are stopped on cancellation; earlier accepted edits remain applied |
 
 Resilience (Task C): model/transport errors are retried with exponential backoff, then the request is re-run on the
-configured **fallback model** automatically; if everything fails the user gets one clear message and `git status`
-is clean. Verified by `npm run e2e` (see below).
+configured **fallback model** automatically when no edit or command has run. If a turn fails after an accepted
+edit or command, it stops with a clear message instead of replaying side effects. Earlier accepted edits remain
+applied; use undo to revert them. Verified by `npm run e2e` (see below).
 
 ## Setup from a clean clone
 
@@ -109,7 +110,7 @@ extension loads it and fills in the model and server name from settings (`src/tr
 ## Tests
 
 ```bash
-npm test                 # unit tests: hunks, edit blocks, retrieval (incl. Task B on pallets/flask if ../flask exists)
+npm test                 # 49 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):
                          #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation
 node dist/headless.js assemble --root ../flask "Add a new built-in CLI command flask config …"   # print a context pack
@@ -118,6 +119,9 @@ node dist/headless.js assemble --root ../flask "Add a new built-in CLI command f
 The mock model (`scripts/mock-model.mjs`) is an OpenAI-compatible server with a scripted coding policy and a
 `--fail` switch; it exists so the *behaviours* can be tested deterministically, exactly as the judging rubric scores
 them. It is not used for the demo video's model.
+
+Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
+a real-model run inside VS Code and the recorded demo still need manual verification.
 
 ## Fixed tasks (Round 1)
 

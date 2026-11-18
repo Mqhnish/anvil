@@ -6,6 +6,7 @@ import { TrueForge, TrueForgeError } from '@truefoundry/trueforge-sdk';
 export interface TrueForgeConnection {
   client: TrueForge;
   baseUrl: string;
+  token?: string;
 }
 
 export function createClient(baseUrl: string, token?: string): TrueForgeConnection {
@@ -14,12 +15,12 @@ export function createClient(baseUrl: string, token?: string): TrueForgeConnecti
     token: token || undefined,
     timeoutInSeconds: 600, // SSE turns can be long
   });
-  return { client, baseUrl: baseUrl.replace(/\/$/, '') };
+  return { client, baseUrl: baseUrl.replace(/\/$/, ''), token: token || undefined };
 }
 
 export async function ping(conn: TrueForgeConnection): Promise<{ ok: boolean; message: string }> {
   try {
-    const res = await fetch(conn.baseUrl + '/api/v1/capabilities', { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(conn.baseUrl + '/api/v1/capabilities', { signal: AbortSignal.timeout(4000), headers: conn.token ? { Authorization: `Bearer ${conn.token}` } : undefined });
     if (!res.ok) return { ok: false, message: `TrueForge answered ${res.status} at ${conn.baseUrl}` };
     return { ok: true, message: 'ok' };
   } catch (e) {

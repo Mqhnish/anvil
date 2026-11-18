@@ -9,7 +9,8 @@
 import fs from 'node:fs/promises';
 import fssync from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { resolveWorkspacePath } from './paths';
+import { executeCommand } from './commands';
 import ignore from 'ignore';
 import type { WorkspaceHost, FileStat, DirEntry, SymbolInfo, Diagnostic, CommandResult, ProposeEditRequest, ReviewOutcome } from './types';
 import { outlineFile } from '../context/outline';
@@ -38,9 +39,7 @@ export class HeadlessHost implements WorkspaceHost {
   }
 
   private abs(rel: string): string {
-    const p = path.resolve(this.rootPath, rel);
-    if (!p.startsWith(this.rootPath)) throw new Error(`path escapes workspace: ${rel}`);
-    return p;
+    return resolveWorkspacePath(this.rootPath, rel);
   }
 
   private async loadIgnore(): Promise<void> {
@@ -90,16 +89,7 @@ export class HeadlessHost implements WorkspaceHost {
 
   runCommand(command: string, opts: { cwd?: string; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<CommandResult> {
     this.commands.push(command);
-    const t0 = Date.now();
-    return new Promise(resolve => {
-      const child = spawn(command, { shell: true, cwd: opts.cwd ? this.abs(opts.cwd) : this.rootPath, env: { ...process.env } });
-      let stdout = '', stderr = '', timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, opts.timeoutMs ?? 120000);
-      child.stdout.on('data', d => { stdout += d; if (stdout.length > 200000) stdout = stdout.slice(-200000); });
-      child.stderr.on('data', d => { stderr += d; if (stderr.length > 100000) stderr = stderr.slice(-100000); });
-      opts.signal?.addEventListener('abort', () => child.kill('SIGKILL'));
-      child.on('close', code => { clearTimeout(timer); resolve({ exitCode: code, stdout, stderr, timedOut, durationMs: Date.now() - t0 }); });
-    });
+    return executeCommand(command, opts.cwd ? this.abs(opts.cwd) : this.rootPath, opts);
   }
 
   async reviewEdit(req: ProposeEditRequest, prev: { oldContent: string; newContent: string }): Promise<ReviewOutcome> {

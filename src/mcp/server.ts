@@ -279,6 +279,8 @@ export class WorkspaceMcpServer {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, title: 'Propose edit (reviewed hunk-by-hunk)' },
     }, wrap(TOOL_NAMES.proposeEdit, async ({ path, summary, edits, new_content }: { path: string; summary: string; edits?: { old: string; new: string }[]; new_content?: string }) => {
+      const signal = decisions.signal;
+      signal.throwIfAborted();
       if (!edits?.length && new_content === undefined) return this.err('provide either edits[] or new_content');
       const exists = await host.fileExists(path);
       const oldContent = exists ? await host.readFile(path) : '';
@@ -299,13 +301,19 @@ export class WorkspaceMcpServer {
       let stored = decisions.take(key);
       // 2. Otherwise ask the host to review now (headless auto-accept, or a direct call without approval gate).
       if (!stored) {
-        const outcome = await host.reviewEdit({ path, newContent: proposed, summary }, { oldContent, newContent: proposed });
+        const outcome = await host.reviewEdit({ path, newContent: proposed, summary, signal }, { oldContent, newContent: proposed });
         if (outcome.decision === 'deny') return this.text(`User rejected the change to ${path}${outcome.reason ? ': ' + outcome.reason : ''}. No files were modified. Ask what they want instead or propose a different change.`);
-        stored = { key, path, baselineHash: '', proposedHash: '', decisions: outcome.decisions, resultingContent: outcome.resultingContent ?? proposed, createdAt: Date.now() };
+        stored = { key, path, baselineHash: '', proposedHash: '', decisions: outcome.decisions, resultingContent: outcome.resultingContent ?? applyHunks(set, new Set(outcome.decisions.filter(d => d.accepted).map(d => d.index))), createdAt: Date.now() };
       }
       const accepted = new Set(stored.decisions.filter(d => d.accepted).map(d => d.index));
       const resulting = stored.resultingContent ?? applyHunks(set, accepted);
       if (resulting === oldContent) return this.text(`User rejected every hunk for ${path}. No files were modified.`);
+      signal.throwIfAborted();
+      const stillExists = await host.fileExists(path);
+      const current = stillExists ? await host.readFile(path) : '';
+      if (stillExists !== exists || current !== oldContent) return this.err(`${path} changed during review. Re-read the file and propose the change again.`);
+      signal.throwIfAborted();
+      decisions.recordSideEffect();
       await host.applyEdit(path, oldContent, resulting);
       await index.touch(path);
       const rejected = stored.decisions.filter(d => !d.accepted);
@@ -323,13 +331,17 @@ export class WorkspaceMcpServer {
     server.registerTool(TOOL_NAMES.runCommand, {
       title: 'Run command',
       description: 'Run a shell command in the workspace root (tests, linters, the app). The user must approve it. Output is truncated; prefer focused commands (e.g. `pytest tests/test_cli.py -q`).',
-      inputSchema: { command: z.string(), cwd: z.string().optional(), timeout_sec: z.number().int().optional() },
+      inputSchema: { command: z.string(), cwd: z.string().optional(), timeout_sec: z.number().int().min(1).max(600).optional() },
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     }, wrap(TOOL_NAMES.runCommand, async ({ command, cwd, timeout_sec }: { command: string; cwd?: string; timeout_sec?: number }) => {
       // Approved already during TrueForge's approval pause? Otherwise ask now.
-      const ok = decisions.takeCommandApproval(command) ? { allow: true } : await host.confirmCommand(command, cwd);
+      const signal = decisions.signal;
+      signal.throwIfAborted();
+      const ok = decisions.takeCommandApproval(command, cwd) ? { allow: true } : await host.confirmCommand(command, cwd);
       if (!ok.allow) return this.text(`User declined to run: ${command}${'reason' in ok && ok.reason ? ' — ' + ok.reason : ''}`);
-      const r = await host.runCommand(command, { cwd, timeoutMs: (timeout_sec ?? 120) * 1000 });
+      signal.throwIfAborted();
+      decisions.recordSideEffect();
+      const r = await host.runCommand(command, { cwd, signal, timeoutMs: (timeout_sec ?? 120) * 1000 });
       const body = [`$ ${command}`, `exit ${r.exitCode}${r.timedOut ? ' (timed out)' : ''} in ${r.durationMs}ms`, r.stdout ? 'stdout:\n' + r.stdout : '', r.stderr ? 'stderr:\n' + r.stderr : ''].filter(Boolean).join('\n');
       return this.text(truncateToTokens(body, 6000));
     }));
@@ -348,7 +360,7 @@ export function globToRegex(glob: string): RegExp {
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];
     if (c === '*') {
-      if (glob[i + 1] === '*') { re += '.*'; i++; if (glob[i + 1] === '/') i++; }
+      if (glob[i + 1] === '*') { i++; if (glob[i + 1] === '/') { re += '(?:.*/)?'; i++; } else re += '.*'; }
       else re += '[^/]*';
     } else if (c === '?') re += '[^/]';
     else if (c === '{') { const j = glob.indexOf('}', i); if (j > 0) { re += '(' + glob.slice(i + 1, j).split(',').map(s => s.replace(/[.+^${}()|[\]\\]/g, '\\$&')).join('|') + ')'; i = j; } else re += '\\{'; }
