@@ -77,7 +77,9 @@ describe('approval lifetime', () => {
 it('stops an active command when its turn is cancelled', async () => {
   const dir = await fixture();
   const controller = new AbortController();
-  const command = executeCommand('(sleep 0.4; touch late) & wait', dir, { signal: controller.signal });
+  // Commands run through cmd.exe on Windows, so use node there for the delayed write.
+  const delayed = process.platform === 'win32' ? `node -e "setTimeout(() => require('fs').writeFileSync('late', ''), 400)"` : '(sleep 0.4; touch late) & wait';
+  const command = executeCommand(delayed, dir, { signal: controller.signal });
   setTimeout(() => controller.abort(), 40);
   const result = await command;
   expect(result.exitCode).toBeNull();
