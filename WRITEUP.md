@@ -6,7 +6,7 @@ Tokenisers, Nanyang Technological University: Mohnish Singh Rawat (@Mqhnish, tea
 
 Repository: https://github.com/Mqhnish/anvil
 
-Demo video (2:31): VIDEO_LINK
+Demo video (2:44): VIDEO_LINK
 
 ## 2. Starting point
 
@@ -40,7 +40,7 @@ All provider credentials stay in TrueForge or the git-ignored local configuratio
 
 Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, 4,000- and 8,000-token context budgets and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
 
-The recorded run used the same model and setup. Task A's edit lists every false value, including the empty string, and FLASK_DEBUG=off and N now read as False. In Task B, Gemini found and edited src/flask/cli.py, tests/test_cli.py and docs/cli.rst without being told the file names. Five diffs were reviewed in one task. Mid-task, the free tier returned a 429; Anvil waited and continued the same TrueForge session (visible in the session at 1:29). Afterwards, tests/test_cli.py passed (59 tests) and `flask config` printed SECRET_KEY as "***". Task C used a local provider that always answers HTTP 503 as the primary; Anvil retried, then fell back to Gemini automatically. Earlier rehearsals stopped at a plan or hit the 20-iteration limit; the agent instructions and the rate-limit continue path were changed before recording.
+The recorded run used the same model and setup. Task A's edit lists every false value, including the empty string, and FLASK_DEBUG=off and N now read as False. In Task B, Gemini found and edited src/flask/cli.py, tests/test_cli.py and docs/cli.rst without being told the file names. Four diffs were reviewed in one task, and the agent ran the CLI tests itself through an approved command. Mid-task, the free tier returned a 429; Anvil waited and continued the same TrueForge session (visible in the session at 1:31). Afterwards, tests/test_cli.py passed (59 tests) and `flask config` printed SECRET_KEY as "***". Task C used a local provider that always answers HTTP 503 as the primary; Anvil retried, then fell back to Gemini automatically. Earlier rehearsals stopped at a plan or hit the 20-iteration limit; the agent instructions and the rate-limit continue path were changed before recording.
 
 ## 6. Scorecard
 
@@ -48,14 +48,14 @@ Timestamps refer to the demo video. In the recording, a scripted Extension Host 
 
 | Criterion | Evidence | Video |
 |---|---|---|
-| A1 Inline edit | Task A on Gemini: diff, accept, then off/N → False and 1 → True | 0:07-0:26 |
-| A2 Agent mode | Task B: agent locates and edits three files, test passes, command masks secrets | 0:28-1:29 |
-| A3 Streaming and cancellation | Esc mid-generation cancels in under 0.3 s; git status stays clean | 2:02-2:10 |
-| B1 Context assembly | Agent chooses its own searches and reads in Task B; retriever ranking and reasons covered by tests | 0:28-1:29 |
-| B2 Diff safety | Per-hunk Accept/Reject CodeLens on every diff; C rejected, D undone byte-for-byte | 0:07-0:26, 1:38-2:00, 2:10-2:26 |
-| B3 Resilience | 503 primary → retry → automatic fallback (C); free-tier 429 → wait and continue (B) | 1:29, 1:38-2:00 |
-| B4 TrueForge depth | Session, turns and tool calls in TrueForge; MCP tools; approval pauses drive review | 1:29-1:36 |
-| C1 Video | 2:31, captioned, played at 1.25×; long model waits sped up further and labelled; no cuts between instruction and diff | full |
+| A1 Inline edit | Task A on Gemini: diff, accept, then off/N → False and 1 → True | 0:15-0:32 |
+| A2 Agent mode | Task B: agent locates and edits three files, test passes, command masks secrets | 0:41-1:30 |
+| A3 Streaming and cancellation | Esc mid-generation cancels in under 0.3 s; git status stays clean | 2:13-2:20 |
+| B1 Context assembly | Agent chooses its own searches and reads in Task B; retriever ranking and reasons covered by tests | 0:41-1:30 |
+| B2 Diff safety | Per-hunk Accept/Reject CodeLens on every diff; C rejected, D undone byte-for-byte | 0:15-0:32, 1:44-2:06, 2:20-2:37 |
+| B3 Resilience | 503 primary → retry → automatic fallback (C); free-tier 429 → wait and continue (B) | 1:31, 1:44-2:06 |
+| B4 TrueForge depth | Session, turns and tool calls in TrueForge; MCP tools; approval pauses drive review | 1:31-1:37 |
+| C1 Video | 2:44 screen recording at 30 fps, played at 1.25×; context cards and step captions; long model waits sped up further and labelled; no cuts between instruction and diff | full |
 | C2 Write-up | This document | - |
 
 ## 7. Tools used

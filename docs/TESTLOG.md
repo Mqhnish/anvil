@@ -180,7 +180,7 @@ Verified:
 
 Real VS Code window (Extension Development Host) on a fresh local clone of Flask 3.1.3 per take, Gemini 3.5
 Flash-Lite (free tier) through local TrueForge. A scripted driver (`tmp/film/driver.cjs`, not shipped) typed the
-instructions and pressed Accept/Reject; frames were captured over CDP and assembled into a 2:31 video (1.25× playback, ~100 ms crossfades between captured frames; capture ran at ~6.6 fps).
+instructions and pressed Accept/Reject; the window was recorded as video over CDP screencast (frames on every repaint, ~50 fps while the screen changes) and assembled into a 2:44 cut at 1.25× playback. The VS Code terminal renders very small at the emulated viewport, so the verification output the driver logged is shown enlarged over it.
 
 - Task A: one diff, accepted. FLASK_DEBUG=off → False, N → False, 1 → True; docstring lists the empty string.
 - Task B (session `01m7ssn1…`): no file names in the instruction. Five diffs reviewed and accepted across
@@ -192,3 +192,10 @@ instructions and pressed Accept/Reject; frames were captured over CDP and assemb
 - Cancel and undo: the first recording showed Esc did nothing while the inline-edit selection was active — the
   `anvil.cancel` keybinding required `!editorHasSelection`. Fixed (500f46c); re-recorded: Esc cancelled in 0.23 s,
   working tree clean. A second, accepted edit was then reverted by "Anvil: Undo Last Applied Change", byte-for-byte.
+
+Re-recorded as video the same day. Task B, first video take: the agent fixed three real test failures sent back as
+follow-ups (wrong exit code, missing `cli` import, timedelta not JSON-serialisable) but ran out of the three allowed
+follow-ups with a missing `import json`; not used. Second take (session `01m7svh3…`): passed with no follow-ups, four
+reviews, 74 lines across the three files, one free-tier 429 with continue-in-place, and two agent-run
+`pytest tests/test_cli.py` commands approved. `TestConfigCommand` sits between `TestRoutes` and the next top-level
+function.
