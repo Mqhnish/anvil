@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the eight-section review draft as a readable three-page PDF."""
+"""Export the eight-section write-up as a readable three-page PDF."""
 from pathlib import Path
 from html import escape
 import re
@@ -10,7 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / 'output/pdf/anvil-writeup-draft.pdf'
+OUTPUT = ROOT / 'output/pdf/anvil-writeup.pdf'
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 INK, MUTED, ACCENT = colors.HexColor('#172534'), colors.HexColor('#536171'), colors.HexColor('#1769aa')
 body = ParagraphStyle('Body', fontName='Helvetica', fontSize=9.2, leading=13, textColor=INK, spaceAfter=8)
@@ -24,7 +24,7 @@ def footer(canvas, doc):
     canvas.line(42, 40, A4[0]-42, 40)
     canvas.setFont('Helvetica', 8)
     canvas.setFillColor(MUTED)
-    canvas.drawString(42, 26, 'ANVIL / TOKENISERS  -  REVIEW DRAFT / LIVE DEMO PENDING')
+    canvas.drawString(42, 26, 'ANVIL / TOKENISERS  -  TRUEFOUNDRY FORGE-A-THON ROUND 1')
     canvas.drawRightString(A4[0]-42, 26, str(doc.page))
 
 def paragraph(text, style=body):
@@ -32,7 +32,7 @@ def paragraph(text, style=body):
 
 text = (ROOT / 'WRITEUP.md').read_text()
 sections = re.split(r'^## ', text, flags=re.M)[1:]
-story = [paragraph('Anvil', title), paragraph('Coding with context and review', heading), paragraph('TrueFoundry Forge-a-thon | Round 1 review draft', small), Spacer(1, 6)]
+story = [paragraph('Anvil', title), paragraph('Coding with context and review', heading), paragraph('TrueFoundry Forge-a-thon | Round 1 submission', small), Spacer(1, 6)]
 for section in sections:
     name, content = section.split('\n', 1)
     number = int(name.split('.')[0])
@@ -48,7 +48,7 @@ for section in sections:
             story.extend([table, Spacer(1,8)])
         else:
             story.append(paragraph(block.replace('\n',' ')))
-doc = SimpleDocTemplate(str(OUTPUT), pagesize=A4, leftMargin=42, rightMargin=42, topMargin=38, bottomMargin=52, title='Anvil - Round 1 review draft', author='Tokenisers')
+doc = SimpleDocTemplate(str(OUTPUT), pagesize=A4, leftMargin=42, rightMargin=42, topMargin=38, bottomMargin=52, title='Anvil - Round 1 write-up', author='Tokenisers')
 doc.build(story, onFirstPage=footer, onLaterPages=footer)
 if doc.page > 3:
     raise SystemExit(f'Write-up is {doc.page} pages; shorten it to the required maximum of 3 before submitting.')

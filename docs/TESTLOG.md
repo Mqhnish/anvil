@@ -175,3 +175,20 @@ Verified:
 - The Task B verifier now invokes Flask's built-in CLI group with a test app. Flask's application-specific CLI group, previously used by this check, does not contain the built-ins. The rehearsal timeout for B is ten minutes to accommodate provider waits.
 
 - A fresh Task B run with revised edit instructions and no example Flask file names reached the configured 20-iteration limit while gathering context, with zero reviewed edits. The runner now reports that limit explicitly and keeps a normal chat available for follow-up. A new fallback session also starts with fresh lookup history, so the fallback can read results that only the primary saw.
+
+## Recorded demo, 19 November 2026
+
+Real VS Code window (Extension Development Host) on a fresh local clone of Flask 3.1.3 per take, Gemini 3.5
+Flash-Lite (free tier) through local TrueForge. A scripted driver (`tmp/film/driver.cjs`, not shipped) typed the
+instructions and pressed Accept/Reject; frames were captured over CDP and assembled into a 3:04 video.
+
+- Task A: one diff, accepted. FLASK_DEBUG=off → False, N → False, 1 → True; docstring lists the empty string.
+- Task B (session `01m7ssn1…`): no file names in the instruction. Five diffs reviewed and accepted across
+  `src/flask/cli.py`, `tests/test_cli.py`, `docs/cli.rst` (+59 lines). One free-tier 429 mid-task; Anvil waited and
+  continued the same session. `pytest tests/test_cli.py` → 59 passed; `flask config` prints `SECRET_KEY "***"`.
+  The agent ran `pytest tests/test_cli.py` itself through the approved-command path.
+- Task C: primary is a local provider that always returns 503; retry then automatic fallback to Gemini; diff rejected;
+  `git status --porcelain` clean.
+- Cancel and undo: the first recording showed Esc did nothing while the inline-edit selection was active — the
+  `anvil.cancel` keybinding required `!editorHasSelection`. Fixed (500f46c); re-recorded: Esc cancelled in 0.23 s,
+  working tree clean. A second, accepted edit was then reverted by "Anvil: Undo Last Applied Change", byte-for-byte.

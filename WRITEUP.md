@@ -1,14 +1,12 @@
 # Anvil - coding with context and review
 
-Round 1 review draft - partial live-model verification; full demonstration and recording pending.
-
 ## 1. Team
 
 Tokenisers, Nanyang Technological University: Mohnish Singh Rawat (@Mqhnish, team leader), Arnav Jain (@arnavjain29), and Anay Sharma (@WgbCode7129).
 
 Repository: https://github.com/Mqhnish/anvil
 
-Demo video: not recorded. Replace this status with the public video link after recording.
+Demo video (3:04): VIDEO_LINK
 
 ## 2. Starting point
 
@@ -42,23 +40,23 @@ All provider credentials stay in TrueForge or the git-ignored local configuratio
 
 Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, 4,000- and 8,000-token context budgets and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
 
-The live fallback rehearsal switched from a local HTTP 503 to Gemini and applied a reviewed inline edit. All 14 behavior checks passed, but its docstring omitted the empty-string case. During Task B, Anvil resumed in the same session after a 56-second quota wait. Gemini identified three relevant files and stopped at a plan. A second run reached its 20-iteration limit before editing.
+The recorded run used the same model and setup. Task A's edit lists every false value, including the empty string, and FLASK_DEBUG=off and N now read as False. In Task B, Gemini found and edited src/flask/cli.py, tests/test_cli.py and docs/cli.rst without being told the file names. Five diffs were reviewed in one task. Mid-task, the free tier returned a 429; Anvil waited and continued the same TrueForge session (visible in the session at 1:49). Afterwards, tests/test_cli.py passed (59 tests) and `flask config` printed SECRET_KEY as "***". Task C used a local provider that always answers HTTP 503 as the primary; Anvil retried, then fell back to Gemini automatically. Earlier rehearsals stopped at a plan or hit the 20-iteration limit; the agent instructions and the rate-limit continue path were changed before recording.
 
 ## 6. Scorecard
 
-Evidence status below distinguishes implementation checks from the required recorded demonstration. Add video timestamps after recording; no competition score is claimed.
+Timestamps refer to the demo video. In the recording, a scripted Extension Host driver typed the instructions and pressed Accept or Reject; the agent, model, tools and review path are the real ones. No competition score is claimed.
 
-| Criterion | Verified evidence | Still required |
+| Criterion | Evidence | Video |
 |---|---|---|
-| A1 Inline edit | Real Gemini edit passes 13 behavior checks; native diff tested separately | Complete empty-string docstring; record Task A |
-| A2 Agent mode | TrueForge/MCP tool loop exercised headlessly | Real-model Task B: discover and edit at least three files |
-| A3 Streaming and cancellation | Streaming/e2e checks; actual Extension Host review cancellation passes | Record responsive cancellation on video |
-| B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
-| B2 Diff safety | Baseline protection; actual per-hunk accept/reject and WorkspaceEdit undo | Show individual accepted/rejected hunks on video |
-| B3 Resilience | Dead primary, retry, fallback, no-fallback and rate-limit-wait e2e cases pass | Record the verified live fallback |
-| B4 TrueForge depth | Agent spec, MCP registration and approval loop exercised | Show the TrueForge session and explain configured features |
-| C1 Video | Rehearsal script prepared | Record a legible video within the required limit |
-| C2 Write-up | Architecture, context strategy, verification and limitations documented | Fill live model details, video link and timestamps |
+| A1 Inline edit | Task A on Gemini: diff, accept, then off/N → False and 1 → True | 0:06-0:30 |
+| A2 Agent mode | Task B: agent locates and edits three files, test passes, command masks secrets | 0:33-1:49 |
+| A3 Streaming and cancellation | Esc mid-generation cancels in under 0.3 s; git status stays clean | 2:29-2:40 |
+| B1 Context assembly | Agent chooses its own searches and reads in Task B; retriever ranking and reasons covered by tests | 0:33-1:49 |
+| B2 Diff safety | Per-hunk Accept/Reject CodeLens on every diff; C rejected, D undone byte-for-byte | 0:06-0:30, 1:59-2:26, 2:40-2:59 |
+| B3 Resilience | 503 primary → retry → automatic fallback (C); free-tier 429 → wait and continue (B) | 1:49, 1:59-2:26 |
+| B4 TrueForge depth | Session, turns and tool calls in TrueForge; MCP tools; approval pauses drive review | 1:49-1:56 |
+| C1 Video | 3:04, captioned; long model waits sped up and labelled, no cuts between instruction and diff | full |
+| C2 Write-up | This document | - |
 
 ## 7. Tools used
 
@@ -66,6 +64,6 @@ TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extensi
 
 ## 8. Known limitations and next steps
 
-The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The separate real-model inline rehearsal used headless review acceptance, not editor interaction. The recorded editor demonstration remains pending.
+The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The recorded demo ran real models in a real VS Code window, with a scripted driver standing in for the person at the keyboard.
 
 Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.
