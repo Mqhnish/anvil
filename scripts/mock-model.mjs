@@ -9,6 +9,9 @@
  *   node scripts/mock-model.mjs --port 8999            # healthy
  *   node scripts/mock-model.mjs --port 8998 --fail 503  # every request → 503 (simulates a dead provider)
  *   node scripts/mock-model.mjs --port 8997 --fail drop # closes the socket without answering
+ *   node scripts/mock-model.mjs --port 8996 --rate-limit-at 4 --rate-limit-secs 12
+ *       from the 4th chat request, answer every request for 12 s with a Gemini-style per-minute 429
+ *       ("Please retry in 12s"), like a free-tier quota window; then behave normally
  *
  * Register it in TrueForge as a `custom` provider: base_url http://127.0.0.1:8999/v1, model id "mock-coder".
  *
@@ -23,6 +26,10 @@ const arg = (n, d) => { const i = process.argv.indexOf(n); return i >= 0 ? proce
 const port = Number(arg('--port', '8999'));
 const fail = arg('--fail', '');
 const multiHunk = process.argv.includes('--multi-hunk');
+const rateLimitAt = Number(arg('--rate-limit-at', '0'));
+const rateLimitSecs = Number(arg('--rate-limit-secs', '1'));
+let chatRequests = 0;
+let limitedUntil = 0;
 
 function toolCall(name, args) {
   return { id: 'call_' + Math.random().toString(36).slice(2, 10), type: 'function', function: { name, arguments: JSON.stringify(args) } };
@@ -80,6 +87,14 @@ const server = http.createServer((req, res) => {
   if (fail) { res.writeHead(Number(fail) || 503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'mock provider is down (simulated)', type: 'server_error' } })); return; }
   if (req.url === '/v1/models' || req.url === '/models') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ object: 'list', data: [{ id: 'mock-coder', object: 'model' }] })); return; }
   if (!/chat\/completions$/.test(req.url || '')) { res.writeHead(404); res.end(); return; }
+  if (rateLimitAt && ++chatRequests === rateLimitAt) limitedUntil = Date.now() + rateLimitSecs * 1000;
+  if (Date.now() < limitedUntil) {
+    const left = Math.max(1, Math.ceil((limitedUntil - Date.now()) / 1000));
+    process.stderr.write(`[mock] 429 for request ${chatRequests} (${left}s left in window)\n`);
+    res.writeHead(429, { 'content-type': 'application/json', 'retry-after': String(left) });
+    res.end(JSON.stringify({ error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: `You exceeded your current quota (simulated). Quota exceeded for metric: input_token_count, limit: 250000, description: input tokens per minute limit exceeded on Free Tier.\nPlease retry in ${left}s.` } }));
+    return;
+  }
   let body = '';
   req.on('data', d => (body += d));
   req.on('end', () => {

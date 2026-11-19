@@ -22,7 +22,7 @@ Anvil hosts a local MCP server with a per-launch secret. Its tools expose file r
 
 Tool approval drives review. Before a proposed edit executes, Anvil opens a native diff and collects hunk decisions. The executing MCP handler applies only accepted hunks. Decisions are tied to the baseline and proposal; intervening file changes require a fresh review. Undo restores the previous content and removes newly created files when appropriate.
 
-Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request.
+Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request. A provider's per-minute rate limit (HTTP 429) is different: Anvil waits the time the provider asks for, then continues the same TrueForge session with a short continue message, so nothing is redone even after accepted edits.
 
 Four frequent tools are preloaded; other tools are discovered on demand. The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. These features are configured, but their usefulness in the final real-model task has not yet been demonstrated.
 
@@ -55,7 +55,7 @@ Evidence status below distinguishes implementation checks from the required reco
 | A3 Streaming and cancellation | Streaming/e2e checks; actual Extension Host review cancellation passes | Record responsive cancellation on video |
 | B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
 | B2 Diff safety | Baseline protection; actual per-hunk accept/reject and WorkspaceEdit undo | Show individual accepted/rejected hunks on video |
-| B3 Resilience | Dead primary, retry, fallback, and no-fallback e2e cases pass | Repeat with a real fallback model |
+| B3 Resilience | Dead primary, retry, fallback, no-fallback and rate-limit-wait e2e cases pass | Repeat with a real fallback model |
 | B4 TrueForge depth | Agent spec, MCP registration and approval loop exercised | Show the TrueForge session and explain configured features |
 | C1 Video | Rehearsal script prepared | Record a legible video within the required limit |
 | C2 Write-up | Architecture, context strategy, verification and limitations documented | Fill live model details, video link and timestamps |

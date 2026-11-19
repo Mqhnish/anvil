@@ -30,12 +30,12 @@ const arg = (n: string, d?: string) => { const i = process.argv.indexOf(n); retu
 const TF = arg('--trueforge', 'http://localhost:8790')!;
 const ROOT = path.resolve(arg('--root', '../flask')!);
 const RUN_ID = 'e2e-' + Math.random().toString(36).slice(2, 10);
-const PROVIDER_OK = RUN_ID + '-mock', PROVIDER_DEAD = RUN_ID + '-dead';
-const MODEL_OK = PROVIDER_OK + '/mock-coder', MODEL_DEAD = PROVIDER_DEAD + '/mock-coder';
+const PROVIDER_OK = RUN_ID + '-mock', PROVIDER_DEAD = RUN_ID + '-dead', PROVIDER_RL = RUN_ID + '-ratelimited';
+const MODEL_OK = PROVIDER_OK + '/mock-coder', MODEL_DEAD = PROVIDER_DEAD + '/mock-coder', MODEL_RL = PROVIDER_RL + '/mock-coder';
 const SCRIPTS = path.resolve(__dirname, '..', 'scripts');
 
-async function startMock(fail?: string): Promise<{ proc: ChildProcess; port: number }> {
-  const proc = spawn(process.execPath, [path.join(SCRIPTS, 'mock-model.mjs'), '--port', '0', ...(fail ? ['--fail', fail] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
+async function startMock(fail?: string, extra: string[] = []): Promise<{ proc: ChildProcess; port: number }> {
+  const proc = spawn(process.execPath, [path.join(SCRIPTS, 'mock-model.mjs'), '--port', '0', ...(fail ? ['--fail', fail] : []), ...extra], { stdio: ['ignore', 'pipe', 'inherit'] });
   return new Promise((resolve, reject) => {
     let output = '';
     const timer = setTimeout(() => { proc.kill(); reject(new Error('Mock model did not become ready')); }, 5000);
@@ -82,6 +82,8 @@ async function main(): Promise<void> {
     const dead = await startMock('503'); procs.push(dead.proc);
     await registerProvider(PROVIDER_OK, ok.port);
     await registerProvider(PROVIDER_DEAD, dead.port);
+    const limited = await startMock(undefined, ['--rate-limit-at', '4', '--rate-limit-secs', '12']); procs.push(limited.proc);
+    await registerProvider(PROVIDER_RL, limited.port);
 
     const scenarios: Scenario[] = [
       { name: 'agent turn edits a file after approval + review', run: () => scenarioAgent('accept-all', true) },
@@ -89,6 +91,7 @@ async function main(): Promise<void> {
       { name: 'resilience: dead primary → retries → automatic fallback', run: () => scenarioResilience(true) },
       { name: 'resilience: dead primary, no fallback → clear error, workspace unchanged', run: () => scenarioResilience(false) },
       { name: 'cancellation mid-turn leaves workspace unchanged', run: scenarioCancel },
+      { name: 'rate limit after an applied edit → wait → same session continues, nothing redone', run: scenarioRateLimit },
     ];
     for (const s of scenarios) {
       const t0 = Date.now();
@@ -103,6 +106,7 @@ async function main(): Promise<void> {
     for (const proc of procs) proc.kill();
     await conn.client.settings.modelProviders.delete(PROVIDER_OK).catch(() => {});
     await conn.client.settings.modelProviders.delete(PROVIDER_DEAD).catch(() => {});
+    await conn.client.settings.modelProviders.delete(PROVIDER_RL).catch(() => {});
   }
 }
 
@@ -194,6 +198,26 @@ async function scenarioCancel(): Promise<void> {
     const r = await run;
     if (r.status !== 'cancelled') throw new Error(`expected cancelled, got ${r.status}: ${r.message}`);
     if (fs.readFileSync(target, 'utf8') !== before) throw new Error('workspace changed after cancel');
+  } finally { await s.cleanup(); }
+}
+
+/**
+ * From the 4th model request (after propose_edit has been approved and applied) the provider answers 429 for
+ * 12 s, longer than TrueForge's own retries. The runner must wait the hinted time, continue the SAME TrueForge session, and finish
+ * without re-proposing the edit: the file carries the change exactly once and no fallback is used.
+ */
+async function scenarioRateLimit(): Promise<void> {
+  const s = await setup('accept-all', MODEL_RL);
+  try {
+    const target = path.join(s.repo, 'src/flask/helpers.py');
+    const r = await s.runner.run(TASK);
+    if (r.status !== 'done') throw new Error(`expected done after waiting out the limit, got ${r.status}: ${r.message}`);
+    if (!s.statuses.some(t => /rate limited/.test(t))) throw new Error('rate-limit wait not observed (did TrueForge retry internally?): ' + s.statuses.join(' | '));
+    if (r.usedFallback) throw new Error('fell back instead of continuing');
+    const marks = fs.readFileSync(target, 'utf8').split('touched by mock-coder').length - 1;
+    if (marks !== 1) throw new Error(`edit applied ${marks} times, expected exactly once`);
+    const edits = s.toolCalls.filter(n => n === 'propose_edit').length;
+    if (edits !== 1) throw new Error(`propose_edit executed ${edits} times`);
   } finally { await s.cleanup(); }
 }
 

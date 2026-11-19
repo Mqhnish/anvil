@@ -141,3 +141,29 @@ against disposable Flask 3.1.3 copies. The original Flask checkout and provider 
   restricted test attempt could not bind localhost sockets; rerunning with local networking allowed passed.
 
 Pricing reference checked during the run: https://aistudio.google.com/docs/pricing.
+
+
+## Free-tier quota safeguards - 19 November 2026
+
+Diagnosis of the live Task B stop, from the retained `output/verification/live-2026-11-19T10-33-14-952Z/` events:
+14 model calls in about 60 s, each resending the conversation (3k rising to 22.6k input tokens), together over
+Gemini's 250,000-input-tokens-per-minute free limit. The same `search_workspace` query ran three times with an
+identical 21-match result. Gemini's 429 said "Please retry in 39.2s"; TrueForge's own short retries gave up and the
+turn ended. History never reached the 60k compaction trigger, so earlier compaction would not have changed this run.
+
+Changes:
+- Runner: a per-minute 429 (`rateLimitWaitMs`: honours "retry in Ns"/Retry-After, 60 s default, 90 s cap, daily
+  quotas excluded) is waited out, then the same session gets a short continue message. Up to 4 waits per task;
+  they do not consume retries; cancellation during the wait returns immediately. Safe after accepted edits because
+  nothing is replayed.
+- MCP server: an identical read-only call (read_file, list_dir, search_workspace, find_symbols, assemble_context)
+  whose result is also identical, within the same turn, returns a one-line note instead of the full output.
+  Results are compared, so a file edited mid-turn is still returned in full.
+
+Verified:
+- 68 tests across 10 files pass (5 new: wait parsing, continue-not-replay after an edit, cancel during the wait,
+  daily quota falls back, repeated-search collapse incl. changed result and new turn); typecheck and build pass.
+- New e2e scenario against real TrueForge 0.185.1: from the 4th request the mock returns 429 for 12 s. TrueForge
+  retried twice (~2 s) then failed the turn; Anvil waited 11 s, continued session `01m7sq4y…`, and finished with
+  the edit applied exactly once and no fallback. All 6 e2e scenarios pass.
+- Not yet run against live Gemini.

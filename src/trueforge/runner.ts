@@ -10,6 +10,9 @@
  *   - cancellation aborts local waits/reviews immediately and requests sessions.cancel.
  *   - each file receives its reviewed hunks in one apply operation. Accepted changes remain on cancellation;
  *     retries and fallback are disabled after an edit or command to avoid replaying side effects.
+ *   - a provider rate limit (per-minute quota, HTTP 429) is waited out for the time the provider asks for, then
+ *     the SAME session continues with a short "continue" message: nothing is replayed, so this is safe even
+ *     after accepted edits. Daily quotas are not waited out.
  */
 import { isEventDelta, mergeEventDelta, type TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import type { TrueForgeConnection } from './client';
@@ -112,6 +115,8 @@ export class TurnRunner {
     const models = [this.o.primaryModel, ...(this.o.fallbackModel && this.o.fallbackModel !== this.o.primaryModel ? [this.o.fallbackModel] : [])];
     let attempts = 0;
     let lastError = '';
+    let rateLimitWaits = 0;
+    let continuing = false; // next turn on the same session is a continuation after a rate-limit wait
     const savedSession = opts.ephemeral ? { id: this.sessionId, model: this.sessionModel } : undefined;
     if (opts.ephemeral) this.resetSession();
 
@@ -122,6 +127,7 @@ export class TurnRunner {
         if (usedFallback) {
           cb.onNotice?.('warn', `Primary model "${models[0]}" failed (${lastError}). Falling back to "${model}" automatically.`);
           this.resetSession();
+          continuing = false;
         }
         for (let attempt = 0; attempt <= this.o.maxRetries; attempt++) {
           attempts++;
@@ -135,10 +141,24 @@ export class TurnRunner {
           try {
             const sid = await untilCancelled(this.ensureSession(model, signal), signal);
             this.activeSessionIdForCancel = sid;
-            const r = await untilCancelled(this.executeTurn(sid, userText, signal), signal);
+            const r = await untilCancelled(this.executeTurn(sid, continuing ? CONTINUE_AFTER_RATE_LIMIT : userText, signal), signal);
+            continuing = false;
             if (r.status === 'done') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             if (r.status === 'cancelled') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             lastError = r.message ?? 'unknown error';
+            const waitMs = rateLimitWaitMs(lastError);
+            if (waitMs !== undefined && rateLimitWaits < MAX_RATE_LIMIT_WAITS) {
+              rateLimitWaits++;
+              const secs = Math.ceil(waitMs / 1000);
+              this.o.host.log(`[runner] rate limited on ${model}; waiting ${secs}s then continuing session ${sid}`);
+              cb.onNotice?.('info', `${model} hit the provider's per-minute limit. Waiting ${secs}s, then continuing where it stopped (nothing is redone).`);
+              cb.onStatus?.(`rate limited — continuing in ${secs}s`);
+              await untilCancelled(sleep(waitMs), signal).catch(() => {});
+              if (this.cancelRequested) return { status: 'cancelled', modelUsed: model, usedFallback, attempts, sessionId: sid };
+              continuing = true;
+              attempt--; // waiting out a rate limit does not use up a retry
+              continue;
+            }
             if (this.o.decisions.hasSideEffects) return { status: 'error', message: `The turn failed after an accepted edit or command: ${lastError}. Previously accepted changes remain applied. Review your workspace before retrying.`, modelUsed: model, usedFallback, attempts, sessionId: sid };
             if (!isRetryable(lastError)) break; // e.g. iteration limit: no point retrying
             this.o.host.log(`[runner] turn error on ${model}: ${lastError}`);
@@ -358,6 +378,27 @@ function contentToText(c: TrueForgeApi.ModelMessageEvent['content'] | undefined)
   if (!c) return undefined;
   if (typeof c === 'string') return c;
   return c.map(p => ('text' in p ? p.text : '')).join('');
+}
+
+const MAX_RATE_LIMIT_WAITS = 4;
+export const CONTINUE_AFTER_RATE_LIMIT =
+  'Continue the task from where you stopped. Your previous step was interrupted by a provider rate limit. ' +
+  'Everything earlier in this conversation still stands: do not repeat searches or reads you already have, and do not re-propose edits that were already applied or rejected.';
+
+/**
+ * How long to wait before continuing after a provider rate limit, or undefined if the error is not a
+ * short-term rate limit. Honours "retry in Ns" / "retry-after: N" hints (Gemini, OpenAI); defaults to 60s,
+ * capped at 90s. Daily quotas return undefined: waiting a minute will not help.
+ */
+export function rateLimitWaitMs(msg: string): number | undefined {
+  const m = msg.toLowerCase();
+  if (!/\b429\b|rate.?limit|quota|resource.?exhausted|too many requests/.test(m)) return undefined;
+  if (/per.?day|daily|requests? per day|rpd\b/.test(m)) return undefined;
+  const hint = /retry (?:in|after) ([\d.]+)\s*(ms|s)\b/.exec(m) ?? /retry-after:?\s*([\d.]+)()/.exec(m);
+  let secs = 60;
+  if (hint) secs = hint[2] === 'ms' ? Number(hint[1]) / 1000 : Number(hint[1]);
+  if (!Number.isFinite(secs)) secs = 60;
+  return Math.round(Math.min(Math.max(secs, 1), 90) * 1000) + 500;
 }
 
 function isRetryable(msg: string): boolean {

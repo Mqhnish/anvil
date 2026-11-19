@@ -65,3 +65,20 @@ it('matches globstar against both root and nested paths', () => {
   expect(globToRegex('src/**/*.py').test('src/flask/cli.py')).toBe(true);
   expect(globToRegex('src/*.py').test('src/flask/cli.py')).toBe(false);
 });
+
+it('collapses an identical repeated search within a turn, but not a changed result or a new turn', async () => {
+  const { host, client, decisions } = await fixture();
+  await host.writeFile('a.py', Array.from({ length: 40 }, (_, i) => `def handler_${i}(): return "json dumps ${i}"`).join('\n') + '\n');
+  decisions.beginTurn();
+  const call = async () => ((await client.callTool({ name: 'search_workspace', arguments: { query: 'json' } })).content as { text: string }[])[0].text;
+  const first = await call();
+  expect(first).toContain('a.py');
+  const repeat = await call();
+  expect(repeat).toContain('Same result as your earlier identical search_workspace call');
+  expect(repeat.length).toBeLessThan(first.length);
+  await host.writeFile('a.py', 'def handler(): return "json"\n'.repeat(30) + '# changed\n');
+  expect(await call()).not.toContain('Same result');   // result changed → returned in full
+  decisions.beginTurn();
+  const nextTurn = await call();
+  expect(nextTurn).not.toContain('Same result');        // new turn → full result again
+});

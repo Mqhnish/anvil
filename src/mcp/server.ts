@@ -13,7 +13,7 @@
  *   - everything else is readOnlyHint:true and runs without pausing.
  */
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
@@ -55,6 +55,10 @@ export const TOOL_NAMES = {
   runCommand: 'run_command',
   gitStatus: 'git_status',
 } as const;
+
+/** Read-only tools whose identical repeats within a turn are collapsed (see WorkspaceMcpServer.dedupe). */
+const DEDUPE_TOOLS = new Set<string>([TOOL_NAMES.readFile, TOOL_NAMES.listDir, TOOL_NAMES.search, TOOL_NAMES.symbols, TOOL_NAMES.assemble]);
+const DEDUPE_MIN_CHARS = 400;
 
 export class WorkspaceMcpServer {
   private httpServer?: http.Server;
@@ -118,6 +122,30 @@ export class WorkspaceMcpServer {
     }
   }
 
+  /**
+   * Per-turn memory of read-only tool results, keyed by the turn's abort signal (a new one per turn).
+   * A repeat of an identical call whose result is also identical is answered with one line instead of the
+   * whole result again: small models loop on the same search, and every repeat is re-sent on each later model
+   * call, which is what exhausts per-minute token quotas. Results are compared, not assumed, so a file the user
+   * edits mid-turn is still returned in full.
+   */
+  private readonly seen = new WeakMap<AbortSignal, Map<string, string>>();
+
+  private dedupe(name: string, args: unknown, text: string): string {
+    if (text.length < DEDUPE_MIN_CHARS) return text;
+    const signal = this.opts.decisions.signal;
+    let turn = this.seen.get(signal);
+    if (!turn) { turn = new Map(); this.seen.set(signal, turn); }
+    const key = name + '\u0000' + JSON.stringify(args ?? {});
+    const digest = createHash('sha1').update(text).digest('hex');
+    if (turn.get(key) === digest) {
+      return `Same result as your earlier identical ${name} call in this turn: nothing has changed, so it is not repeated here. ` +
+        'Use that earlier output. If you need something different, change the query, narrow the glob, or read_file the specific lines.';
+    }
+    turn.set(key, digest);
+    return text;
+  }
+
   private text(s: string) { return { content: [{ type: 'text' as const, text: s }] }; }
   private err(s: string) { return { content: [{ type: 'text' as const, text: s }], isError: true }; }
 
@@ -129,7 +157,12 @@ export class WorkspaceMcpServer {
       const t0 = Date.now();
       ev?.onToolCall?.(name, a);
       try {
-        const r = await fn(a);
+        let r = await fn(a);
+        if (DEDUPE_TOOLS.has(name) && !(r as { isError?: boolean }).isError) {
+          const full = r.content.map(c => c.text).join('\n');
+          const out = this.dedupe(name, a, full);
+          if (out !== full) r = { ...r, content: [{ type: 'text', text: out }] } as R;
+        }
         ev?.onToolResult?.(name, r.content.map(c => c.text).join('\n'), Date.now() - t0);
         return r;
       } catch (e) {
