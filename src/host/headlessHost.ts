@@ -89,7 +89,7 @@ export class HeadlessHost implements WorkspaceHost {
 
   runCommand(command: string, opts: { cwd?: string; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<CommandResult> {
     this.commands.push(command);
-    return executeCommand(command, opts.cwd ? this.abs(opts.cwd) : this.rootPath, opts);
+    return executeCommand(command, opts.cwd ? this.abs(opts.cwd) : this.rootPath, { ...opts, root: this.rootPath });
   }
 
   async reviewEdit(req: ProposeEditRequest, prev: { oldContent: string; newContent: string }): Promise<ReviewOutcome> {

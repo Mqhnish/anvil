@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { HeadlessHost } from '../src/host/headlessHost';
 import { resolveWorkspacePath } from '../src/host/paths';
-import { executeCommand } from '../src/host/commands';
+import { commandEnv, executeCommand } from '../src/host/commands';
 import { DecisionStore } from '../src/edit/decisions';
 
 const dirs: string[] = [];
@@ -89,3 +89,16 @@ it('stops an active command when its turn is cancelled', async () => {
   await new Promise(resolve => setTimeout(resolve, win ? 3500 : 500));
   expect(await fs.readdir(dir)).toEqual([]);
 }, 15000);
+
+describe('agent command environment', () => {
+  it('puts the workspace virtual environment first on PATH', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'anvil-venv-'));
+    const bin = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts' : 'bin');
+    await fs.mkdir(bin, { recursive: true });
+    const env = commandEnv(root, { PATH: '/usr/bin' });
+    expect(env.PATH?.split(path.delimiter)[0]).toBe(bin);
+    expect(env.VIRTUAL_ENV).toBe(path.join(root, '.venv'));
+    expect(commandEnv(path.join(root, 'none'), { PATH: '/usr/bin' }).PATH).toBe('/usr/bin');
+    await fs.rm(root, { recursive: true, force: true });
+  });
+});
