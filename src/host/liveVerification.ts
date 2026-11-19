@@ -1,4 +1,8 @@
-/** Opt-in real Free Tier rehearsal. Uses the production runner and disposable Flask copies. */
+/**
+ * Opt-in real-model rehearsal of the fixed tasks. Uses the production runner and disposable Flask copies.
+ *   node dist/liveVerification.js --model ollama/qwen2-5-coder-7b-16k --cost-confirmed --only a
+ * --model (or ANVIL_LIVE_MODEL) picks any model configured in TrueForge; --budget sets the context pack budget.
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
@@ -12,9 +16,12 @@ import { createClient, registerWorkspaceMcp, ping } from '../trueforge/client';
 const arg = (name: string, fallback: string) => process.argv[process.argv.indexOf(name) + 1] ?? fallback;
 const ROOT = path.resolve(process.argv.includes('--root') ? arg('--root', '') : '../flask');
 const TF = process.env.ANVIL_TEST_TRUEFORGE_URL ?? 'http://127.0.0.1:8790';
-const MODEL = 'google-gemini/gemini-3-5-flash-lite';
+const MODEL = process.argv.includes('--model') ? arg('--model', '') : process.env.ANVIL_LIVE_MODEL ?? 'google-gemini/gemini-3-5-flash-lite';
+// Slow local models (CPU-only Ollama) need more than the default 4 (A/C) or 10 (B) minutes per task.
+const TIMEOUT_MIN = Number(process.argv.includes('--timeout-min') ? arg('--timeout-min', '0') : 0);
+const BUDGET = Number(process.argv.includes('--budget') ? arg('--budget', '4000') : 4000);
 const OUTPUT = path.resolve('output/verification/live-' + new Date().toISOString().replace(/[:.]/g, '-'));
-const PYTHON = path.resolve('tmp/flask-verification-venv/bin/python');
+const PYTHON = path.resolve(process.platform === 'win32' ? 'tmp/flask-verification-venv/Scripts/python.exe' : 'tmp/flask-verification-venv/bin/python');
 const conn = createClient(TF);
 const results: unknown[] = [];
 const taskB = 'Add a new built-in CLI command flask config that prints the loaded application\'s configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.';
@@ -25,7 +32,7 @@ function python(repo: string, args: string[]): string {
 
 async function scenario(name: string, primary = MODEL, fallback?: string): Promise<void> {
   const repo = path.join(OUTPUT, name);
-  fs.cpSync(ROOT, repo, { recursive: true, filter: p => !/(^|\/)(\.git|\.venv|__pycache__|\.pytest_cache|\.vscode)(\/|$)/.test(p) });
+  fs.cpSync(ROOT, repo, { recursive: true, filter: p => !/(^|[\/])(\.git|\.venv|__pycache__|\.pytest_cache|\.vscode)([\/]|$)/.test(p) });
   process.env.PYTHONPATH = path.join(repo, 'src');
   const host = new HeadlessHost(repo, { reviewPolicy: 'accept-all' });
   const index = new RepoIndex(host);
@@ -34,7 +41,7 @@ async function scenario(name: string, primary = MODEL, fallback?: string): Promi
   const notices: string[] = [];
   const events: unknown[] = [];
   const serverName = 'anvil-live-' + Math.random().toString(36).slice(2, 10);
-  const mcp = new WorkspaceMcpServer({ host, index, decisions, budgetTokens: () => 4000 });
+  const mcp = new WorkspaceMcpServer({ host, index, decisions, budgetTokens: () => BUDGET });
   const runner = new TurnRunner({
     conn, host, decisions, primaryModel: primary, fallbackModel: fallback, maxRetries: 0,
     spec: { mcpServerName: serverName, subagents: false, compactionTriggerTokens: 60000, iterationLimit: 20,
@@ -63,7 +70,7 @@ async function scenario(name: string, primary = MODEL, fallback?: string): Promi
       '', 'selected code (use this EXACT text as the `old` search block of propose_edit):', '```', selected, '```',
     ].join('\n');
     fs.writeFileSync(path.join(repo, '../' + name + '-prompt.txt'), prompt);
-    timer = setTimeout(() => void runner.cancel(), name === 'task-b' ? 600000 : 240000);
+    timer = setTimeout(() => void runner.cancel(), TIMEOUT_MIN ? TIMEOUT_MIN * 60000 : name === 'task-b' ? 600000 : 240000);
     const outcome = await runner.run(prompt, { ephemeral: name !== 'task-b' });
     const record = { name, outcome, ms: Date.now() - start, tools, notices, reviews: host.reviews, commands: host.commands, verified: false };
     results.push(record);
@@ -93,7 +100,10 @@ async function scenario(name: string, primary = MODEL, fallback?: string): Promi
 }
 
 async function main(): Promise<void> {
-  if (!process.argv.includes('--free-tier-confirmed')) throw new Error('Confirm the key uses a Free Tier project with billing disabled before running this opt-in test.');
+  if (!process.argv.includes('--free-tier-confirmed') && !process.argv.includes('--cost-confirmed')) {
+    throw new Error('This test calls a real model. Pass --free-tier-confirmed (Gemini Free Tier, billing disabled) or --cost-confirmed (a local model, or one you accept paying for).');
+  }
+  console.error(`Model: ${MODEL}; context budget ${BUDGET} tokens`);
   const only = process.argv.includes('--only') ? arg('--only', '') : '';
   if (only && !['a', 'b', 'c'].includes(only)) throw new Error('--only must be a, b, or c');
   const health = await ping(conn);
