@@ -13,6 +13,8 @@
  *   - a provider rate limit (per-minute quota, HTTP 429) is waited out for the time the provider asks for, then
  *     the SAME session continues with a short "continue" message: nothing is replayed, so this is safe even
  *     after accepted edits. Daily quotas are not waited out.
+ *   - a model that writes a tool call as text (some local and smaller models do) instead of calling the tool gets up
+ *     to two short nudges on the SAME session to make the real call. Nothing ran, so nothing is replayed.
  */
 import { isEventDelta, mergeEventDelta, type TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import type { TrueForgeConnection } from './client';
@@ -117,6 +119,8 @@ export class TurnRunner {
     let lastError = '';
     let rateLimitWaits = 0;
     let continuing = false; // next turn on the same session is a continuation after a rate-limit wait
+    let textToolNudges = 0;
+    let nudgeFor: string | undefined; // next turn on the same session asks for a real call of this tool
     const savedSession = opts.ephemeral ? { id: this.sessionId, model: this.sessionModel } : undefined;
     if (opts.ephemeral) this.resetSession();
 
@@ -128,6 +132,7 @@ export class TurnRunner {
           cb.onNotice?.('warn', `Primary model "${models[0]}" failed (${lastError}). Falling back to "${model}" automatically.`);
           this.resetSession();
           continuing = false;
+          nudgeFor = undefined;
           // A fresh model session has never seen the primary session's tool results.
           if (!this.cancelRequested) {
             this.o.decisions.beginTurn();
@@ -146,9 +151,22 @@ export class TurnRunner {
           try {
             const sid = await untilCancelled(this.ensureSession(model, signal), signal);
             this.activeSessionIdForCancel = sid;
-            const r = await untilCancelled(this.executeTurn(sid, continuing ? CONTINUE_AFTER_RATE_LIMIT : userText, signal), signal);
+            const message = continuing ? CONTINUE_AFTER_RATE_LIMIT : nudgeFor ? textToolCallNudge(nudgeFor) : userText;
+            const r = await untilCancelled(this.executeTurn(sid, message, signal), signal);
             continuing = false;
-            if (r.status === 'done') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
+            nudgeFor = undefined;
+            if (r.status === 'done') {
+              const written = textToolCallName(r.output);
+              if (written && textToolNudges < MAX_TEXT_TOOL_NUDGES && !this.cancelRequested) {
+                textToolNudges++;
+                this.o.host.log(`[runner] ${model} wrote a ${written} call as text; asking for the real tool call on session ${sid}`);
+                cb.onNotice?.('info', `${model} wrote a ${written} call as text instead of calling the tool, so nothing ran. Asking it to make the real tool call (nothing is redone).`);
+                nudgeFor = written;
+                attempt--; // a nudge does not use up a retry
+                continue;
+              }
+              return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
+            }
             if (r.status === 'cancelled') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             lastError = r.message ?? 'unknown error';
             if (/iteration limit/i.test(lastError)) {
@@ -392,6 +410,38 @@ function contentToText(c: TrueForgeApi.ModelMessageEvent['content'] | undefined)
 }
 
 const MAX_RATE_LIMIT_WAITS = 4;
+const MAX_TEXT_TOOL_NUDGES = 2;
+const KNOWN_TOOLS = new Set<string>([...Object.values(TOOL_NAMES), 'call_tool']);
+
+export function textToolCallNudge(tool: string): string {
+  return `Your last reply wrote a \`${tool}\` call as text, so nothing ran and the user saw no change. ` +
+    'Make the real tool call now through the tool-calling interface, with the same arguments. Do not write tool calls as JSON or code blocks.';
+}
+
+/**
+ * The name of a workspace tool the reply wrote out as text instead of calling, or undefined. Recognises JSON objects
+ * (bare, in a code fence, or in <tool_call> tags) whose name is a known tool and that carry arguments.
+ */
+export function textToolCallName(output: string | undefined): string | undefined {
+  if (!output || !/"(?:name|tool|tool_name)"/.test(output)) return undefined;
+  const candidates = [
+    ...[...output.matchAll(/```[a-z_]*\s*([\s\S]*?)```/gi)].map(m => m[1]),
+    ...[...output.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/gi)].map(m => m[1]),
+    output,
+  ];
+  for (const candidate of candidates) {
+    const parsed = safeJson(candidate.trim());
+    for (const o of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (!o || typeof o !== 'object') continue;
+      const r = o as Record<string, unknown>;
+      const fn = (r.function && typeof r.function === 'object' ? r.function : {}) as Record<string, unknown>;
+      const name = r.name ?? fn.name ?? r.tool ?? r.tool_name;
+      const args = r.arguments ?? r.parameters ?? r.input ?? fn.arguments;
+      if (typeof name === 'string' && KNOWN_TOOLS.has(name) && args !== undefined) return name;
+    }
+  }
+  return undefined;
+}
 export const CONTINUE_AFTER_RATE_LIMIT =
   'Continue the task from where you stopped. Your previous step was interrupted by a provider rate limit. ' +
   'Everything earlier in this conversation still stands: do not repeat searches or reads you already have, and do not re-propose edits that were already applied or rejected.';

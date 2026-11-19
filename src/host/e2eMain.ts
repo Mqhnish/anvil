@@ -30,8 +30,8 @@ const arg = (n: string, d?: string) => { const i = process.argv.indexOf(n); retu
 const TF = arg('--trueforge', 'http://localhost:8790')!;
 const ROOT = path.resolve(arg('--root', '../flask')!);
 const RUN_ID = 'e2e-' + Math.random().toString(36).slice(2, 10);
-const PROVIDER_OK = RUN_ID + '-mock', PROVIDER_DEAD = RUN_ID + '-dead', PROVIDER_RL = RUN_ID + '-ratelimited';
-const MODEL_OK = PROVIDER_OK + '/mock-coder', MODEL_DEAD = PROVIDER_DEAD + '/mock-coder', MODEL_RL = PROVIDER_RL + '/mock-coder';
+const PROVIDER_OK = RUN_ID + '-mock', PROVIDER_DEAD = RUN_ID + '-dead', PROVIDER_RL = RUN_ID + '-ratelimited', PROVIDER_TEXT = RUN_ID + '-textcall';
+const MODEL_OK = PROVIDER_OK + '/mock-coder', MODEL_DEAD = PROVIDER_DEAD + '/mock-coder', MODEL_RL = PROVIDER_RL + '/mock-coder', MODEL_TEXT = PROVIDER_TEXT + '/mock-coder';
 const SCRIPTS = path.resolve(__dirname, '..', 'scripts');
 
 async function startMock(fail?: string, extra: string[] = []): Promise<{ proc: ChildProcess; port: number }> {
@@ -84,6 +84,8 @@ async function main(): Promise<void> {
     await registerProvider(PROVIDER_DEAD, dead.port);
     const limited = await startMock(undefined, ['--rate-limit-at', '4', '--rate-limit-secs', '12']); procs.push(limited.proc);
     await registerProvider(PROVIDER_RL, limited.port);
+    const textual = await startMock(undefined, ['--text-tool-calls', '1']); procs.push(textual.proc);
+    await registerProvider(PROVIDER_TEXT, textual.port);
 
     const scenarios: Scenario[] = [
       { name: 'agent turn edits a file after approval + review', run: () => scenarioAgent('accept-all', true) },
@@ -92,6 +94,7 @@ async function main(): Promise<void> {
       { name: 'resilience: dead primary, no fallback → clear error, workspace unchanged', run: () => scenarioResilience(false) },
       { name: 'cancellation mid-turn leaves workspace unchanged', run: scenarioCancel },
       { name: 'rate limit after an applied edit → wait → same session continues, nothing redone', run: scenarioRateLimit },
+      { name: 'edit written as text → nudge on the same session → real reviewed edit', run: scenarioTextToolCall },
     ];
     for (const s of scenarios) {
       const t0 = Date.now();
@@ -107,7 +110,21 @@ async function main(): Promise<void> {
     await conn.client.settings.modelProviders.delete(PROVIDER_OK).catch(() => {});
     await conn.client.settings.modelProviders.delete(PROVIDER_DEAD).catch(() => {});
     await conn.client.settings.modelProviders.delete(PROVIDER_RL).catch(() => {});
+    await conn.client.settings.modelProviders.delete(PROVIDER_TEXT).catch(() => {});
   }
+}
+
+async function scenarioTextToolCall(): Promise<void> {
+  const s = await setup('accept-all', MODEL_TEXT);
+  try {
+    const target = path.join(s.repo, 'src/flask/helpers.py');
+    const r = await s.runner.run(TASK);
+    if (r.status !== 'done') throw new Error(`expected done after the nudge, got ${r.status}: ${r.message}`);
+    if (!s.notices.some(n => /wrote a propose_edit call as text/.test(n))) throw new Error('text tool call was not detected: ' + s.notices.join(' | '));
+    if (r.usedFallback) throw new Error('fell back instead of nudging the same session');
+    const marks = fs.readFileSync(target, 'utf8').split('touched by mock-coder').length - 1;
+    if (marks !== 1) throw new Error(`edit applied ${marks} times, expected exactly once`);
+  } finally { await s.cleanup(); }
 }
 
 async function setup(policy: 'accept-all' | 'reject-all', primary: string, fallback?: string) {

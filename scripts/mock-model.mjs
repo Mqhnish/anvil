@@ -28,7 +28,19 @@ const fail = arg('--fail', '');
 const multiHunk = process.argv.includes('--multi-hunk');
 const rateLimitAt = Number(arg('--rate-limit-at', '0'));
 const rateLimitSecs = Number(arg('--rate-limit-secs', '1'));
+// --text-tool-calls N: the first N edits are written as a JSON code block instead of a real tool call, the way some
+// local models (e.g. qwen2.5-coder through Ollama) answer. Exercises Anvil's nudge-to-call recovery.
+let textToolCalls = Number(arg('--text-tool-calls', '0'));
 let chatRequests = 0;
+
+function asTextToolCall(out) {
+  const call = (out.tool_calls || []).find(tc => tc.function.name === 'propose_edit' || (tc.function.name === 'call_tool' && JSON.parse(tc.function.arguments).tool_name === 'propose_edit'));
+  if (!call || textToolCalls <= 0) return out;
+  textToolCalls--;
+  const a = JSON.parse(call.function.arguments);
+  const args = call.function.name === 'call_tool' ? a.input : a;
+  return { content: '```json\n' + JSON.stringify({ name: 'propose_edit', arguments: args }, null, 2) + '\n```' };
+}
 let limitedUntil = 0;
 
 function toolCall(name, args) {
@@ -72,7 +84,8 @@ function policy(messages, tools) {
   if (firstFile && !calledNames.includes('read_file') && !lastToolText.startsWith(firstFile)) {
     return { content: `I will edit ${firstFile} (chosen by the context pack because it ranked first).`, tool_calls: [via('read_file', { path: firstFile, start_line: 1, end_line: multiHunk ? 100 : 5 })] };
   }
-  const proposed = calledNames.includes('propose_edit') || messages.some(m => m.role === 'assistant' && JSON.stringify(m).includes('"propose_edit"'));
+  // Only real tool calls count (an edit written out as text did not run).
+  const proposed = calledNames.includes('propose_edit') || messages.some(m => m.role === 'assistant' && JSON.stringify(m.tool_calls || []).includes('propose_edit'));
   if (firstFile && !proposed) {
     const firstLine = (lastToolText.split('\n')[1] || '').replace(/^\s*\d+\| /, '');
     const edits = [{ old: firstLine, new: firstLine + '  # touched by mock-coder' }];
@@ -103,7 +116,7 @@ const server = http.createServer((req, res) => {
   req.on('end', () => {
     let payload;
     try { payload = JSON.parse(body); } catch { res.writeHead(400); res.end('bad json'); return; }
-    const out = policy(payload.messages || [], payload.tools || []);
+    const out = asTextToolCall(policy(payload.messages || [], payload.tools || []));
     const id = 'chatcmpl-' + Date.now();
     const created = Math.floor(Date.now() / 1000);
     const usage = { prompt_tokens: Math.ceil(body.length / 4), completion_tokens: 20, total_tokens: Math.ceil(body.length / 4) + 20 };

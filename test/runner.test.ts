@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TurnRunner, rateLimitWaitMs, type Ev } from '../src/trueforge/runner';
+import { TurnRunner, rateLimitWaitMs, textToolCallName, textToolCallNudge, type Ev } from '../src/trueforge/runner';
 import type { TrueForgeConnection } from '../src/trueforge/client';
 import type { WorkspaceHost } from '../src/host/types';
 import { DecisionStore } from '../src/edit/decisions';
@@ -167,5 +167,43 @@ describe('provider rate limits', () => {
     const result = await runner.run('change');
     expect(result.status).toBe('done');
     expect(result.usedFallback).toBe(true);
+  });
+});
+
+describe('tool calls written as text', () => {
+  // The exact shape qwen2.5-coder:7b produced for Task A through Ollama.
+  const qwen = '```json\n{\n  "name": "propose_edit",\n  "arguments": {\n    "path": "src/flask/helpers.py",\n    "edits": [{ "old": "a", "new": "b" }]\n  }\n}\n```';
+  it('recognises a known tool written as JSON in a fence, in tool_call tags, bare, or function-style', () => {
+    expect(textToolCallName(qwen)).toBe('propose_edit');
+    expect(textToolCallName('<tool_call>{"name": "read_file", "arguments": {"path": "a.py"}}</tool_call>')).toBe('read_file');
+    expect(textToolCallName('{"name": "search_workspace", "parameters": {"query": "x"}}')).toBe('search_workspace');
+    expect(textToolCallName('I will call it:\n```\n{"function": {"name": "run_command", "arguments": "{}"}}\n```')).toBe('run_command');
+  });
+  it('ignores prose, unknown tools and JSON without arguments', () => {
+    expect(textToolCallName('Done: edited src/flask/helpers.py.')).toBeUndefined();
+    expect(textToolCallName('```json\n{"name": "delete_everything", "arguments": {}}\n```')).toBeUndefined();
+    expect(textToolCallName('```json\n{"name": "propose_edit"}\n```')).toBeUndefined();
+    expect(textToolCallName(undefined)).toBeUndefined();
+  });
+  const done = (text: string) => events([{ id: 'created', type: 'turn.created', turnId: 'turn' }, { id: 'done', type: 'turn.done', state: { status: 'done', output: { content: text } } }]);
+  it('asks the same session for the real call, without using a retry or the fallback', async () => {
+    const { runner, sessions } = fixture();
+    sessions.createTurnStream.mockImplementationOnce(async () => done(qwen)).mockImplementationOnce(async () => done('Edited helpers.py.'));
+    const outcome = await runner.run('change');
+    expect(outcome.status).toBe('done');
+    expect(outcome.output).toBe('Edited helpers.py.');
+    expect(outcome.usedFallback).toBe(false);
+    expect(sessions.create).toHaveBeenCalledTimes(1);
+    expect(sessions.createTurnStream).toHaveBeenCalledTimes(2);
+    const second = sessions.createTurnStream.mock.calls[1] as unknown as [string, { input: { content: string }[] }];
+    expect(second[0]).toBe('session');
+    expect(second[1].input[0].content).toBe(textToolCallNudge('propose_edit'));
+  });
+  it('stops nudging after two attempts and returns the reply', async () => {
+    const { runner, sessions } = fixture();
+    sessions.createTurnStream.mockImplementation(async () => done(qwen));
+    const outcome = await runner.run('change');
+    expect(outcome.status).toBe('done');
+    expect(sessions.createTurnStream).toHaveBeenCalledTimes(3);
   });
 });
