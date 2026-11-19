@@ -15,7 +15,7 @@ GitHub metadata checked on 19 November still marks `Mqhnish/anvil` private. Make
 
 ## Finish before submitting
 
-1. Configure a real primary model and distinct fallback in TrueForge Settings > Models. Start with the provider you already have access to; the example JSON includes OpenAI and Gemini. For a low-cost starting point, `trueforge/models.budget.example.json` includes GPT-4.1 mini and Gemini 2.5 Flash-Lite; copy it to `models.local.json` and fill keys locally. Keep keys local and off screen.
+1. Follow `FREE-MODEL-SETUP.md`: use an eligible Gemini Free Tier project with billing disabled and `trueforge/models.free.example.json`. No paid provider is authorized for the current submission. Keep keys local and off screen; stop if payment is required. For Task C, the guide describes a local failing primary with the real free model as fallback.
 2. Select both models in Anvil. Run Tasks A, B and C from `DEMO-SCRIPT.md` using the pinned Flask checkout. Verify outputs, tests, review and undo. For Task B, name no files in the instruction and demonstrate at least three changed files.
 3. Rehearse individual hunk Accept/Reject and cancellation for the video. Five real Extension Host scenarios now verify partial hunk acceptance, undo, cancellation, recovery and closing a diff. Run `npm run test:editor` against a local TrueForge server to repeat those checks. If per-hunk controls are missing, check `diffEditor.codeLens` (Anvil enables its default; an explicit user setting can override it).
 4. Record the required <=4-minute video. Keep the instruction-to-diff interval continuous as the demo script specifies. Show the context card, verification commands and TrueForge session. Hide credentials.

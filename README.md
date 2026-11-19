@@ -139,6 +139,13 @@ Mock endpoints use dynamically assigned ports and unique provider names so they 
 **Anvil: Run Workspace Task** starts a task from the command palette; **Anvil: New Chat** starts a fresh session
 when no task is running. Both use the same reviewed tool flow as the sidebar.
 
+## Free model setup
+
+For the current zero-spend submission, use [the Free Tier setup guide](docs/FREE-MODEL-SETUP.md) and
+`trueforge/models.free.example.json`. It contains only Gemini 2.5 Flash-Lite. Use an eligible Free Tier Google
+project with billing disabled; the model name itself does not prevent charges on a paid project. Stop on
+quota or eligibility errors rather than upgrading or choosing a paid fallback.
+
 ## Submission preparation
 
 `npm run check` runs typecheck, tests and the build. `npm run package` builds the extension and creates
