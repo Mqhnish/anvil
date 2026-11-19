@@ -183,6 +183,9 @@ For the current zero-spend submission, use [the Free Tier setup guide](docs/FREE
 project with billing disabled; the model name itself does not prevent charges on a paid project. Stop on
 quota or eligibility errors rather than upgrading or choosing a paid fallback.
 
+The same file also has a free NVIDIA entry (`nvidia/minimax-m3-1-flash`, key from build.nvidia.com). It is slower
+per call than Gemini but has no daily cap, and it completed Task B on its first run. See the guide for results.
+
 ## Submission preparation
 
 `npm run check` runs typecheck, tests and the build. `npm run package` builds the extension and creates

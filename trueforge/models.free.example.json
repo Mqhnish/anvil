@@ -1,6 +1,34 @@
 {
-  "$comment": "Zero-spend starting point: use ONLY with an eligible Gemini Free Tier project whose billing is disabled. This model is also available on paid projects; a model ID or this file cannot enforce free billing. Replace the placeholder locally. Never commit credentials. Stop on quota/eligibility errors rather than enabling billing.",
+  "$comment": "Zero-spend starting points. Gemini: use ONLY with an eligible Gemini Free Tier project whose billing is disabled; a model ID or this file cannot enforce free billing. NVIDIA: free developer access from build.nvidia.com (about 40 requests a minute, for development, not production). Replace the placeholders locally. Never commit credentials. Stop on quota/eligibility errors rather than enabling billing.",
   "providers": [
+    {
+      "manifest": {
+        "type": "custom",
+        "name": "nvidia",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "auth": {
+          "api_key": "REPLACE_ME"
+        },
+        "models": [
+          {
+            "name": "minimax-m3-1-flash",
+            "model_id": "minimaxai/minimax-m3.1-flash",
+            "properties": {
+              "context_length": 128000,
+              "max_output_tokens": 8192
+            }
+          },
+          {
+            "name": "glm-5-3-flash",
+            "model_id": "z-ai/glm-5.3-flash",
+            "properties": {
+              "context_length": 128000,
+              "max_output_tokens": 8192
+            }
+          }
+        ]
+      }
+    },
     {
       "manifest": {
         "type": "google-gemini",

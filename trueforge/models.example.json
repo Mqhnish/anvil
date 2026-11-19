@@ -34,6 +34,18 @@
     {
       "manifest": {
         "type": "custom",
+        "name": "nvidia",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "auth": { "api_key": "nvapi-REPLACE_ME" },
+        "models": [
+          { "name": "minimax-m3-1-flash", "model_id": "minimaxai/minimax-m3.1-flash", "properties": { "context_length": 128000, "max_output_tokens": 8192 } }
+        ]
+      },
+      "$comment": "Free developer key from build.nvidia.com (about 40 requests a minute). Anvil model FQN: nvidia/minimax-m3-1-flash"
+    },
+    {
+      "manifest": {
+        "type": "custom",
         "name": "ollama",
         "base_url": "http://127.0.0.1:11434/v1",
         "auth": { "api_key": "ollama" },
