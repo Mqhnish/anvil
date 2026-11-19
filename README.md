@@ -109,6 +109,9 @@ extension loads it and fills in the model and server name from settings (`src/tr
 
 ## Tests
 
+For the fixed Flask tasks, install `scripts/flask-test-requirements.txt` in a virtual environment alongside the
+editable Flask checkout. The pinned pytest/Click versions avoid unrelated failures in the Flask 3.1.3 baseline.
+
 ```bash
 npm test                 # 63 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):

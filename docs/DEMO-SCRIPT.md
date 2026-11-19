@@ -9,7 +9,7 @@ appearing (cutting model wait time elsewhere is fine); show the TrueForge sessio
 ```bash
 # 1. pinned repo
 git clone --branch 3.1.3 https://github.com/pallets/flask ../flask && cd ../flask && git log -1 --oneline   # 22d9247
-python3 -m venv .venv && source .venv/bin/activate && pip install -e . pytest
+python3 -m venv .venv && source .venv/bin/activate && pip install -e . -r ../anvil/scripts/flask-test-requirements.txt
 git status   # clean
 
 # 2. TrueForge with a real model + a fallback configured (Settings → Models); note the FQNs

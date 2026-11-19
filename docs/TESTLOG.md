@@ -108,3 +108,12 @@ GitHub metadata and the official competition page were checked on 19 November. T
 visibility was not changed. The official deadline is 20 November 2026, 23:59 IST (21 November, 02:29 Singapore).
 Source: https://techfest.org/competitions/forge-a-thon. Real-model credentials, exact Tasks A/B/C, video evidence,
 final write-up evidence fields, repository visibility and submission remain open.
+
+
+## Flask verification environment - 19 November 2026
+
+Prepared a disposable Flask 3.1.3 checkout and a Git-ignored Python virtual environment before real-model evaluation.
+All 58 existing tests in `tests/test_cli.py` pass with the verification dependencies pinned in
+`scripts/flask-test-requirements.txt`. Pytest 9.2 could not collect this checkout because its internal `notset`
+import was removed; pytest 8.4.2 and Click 8.1.8 provide the verified baseline. The demo setup now uses that file.
+This is baseline verification, not evidence of completed model-generated Task B changes.
