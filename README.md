@@ -161,7 +161,7 @@ when no task is running. Both use the same reviewed tool flow as the sidebar.
 ## Free model setup
 
 For the current zero-spend submission, use [the Free Tier setup guide](docs/FREE-MODEL-SETUP.md) and
-`trueforge/models.free.example.json`. It contains only Gemini 2.5 Flash-Lite. Use an eligible Free Tier Google
+`trueforge/models.free.example.json`. It contains only Gemini 3.5 Flash-Lite (2.5 Flash-Lite is no longer available to new projects). Use an eligible Free Tier Google
 project with billing disabled; the model name itself does not prevent charges on a paid project. Stop on
 quota or eligibility errors rather than upgrading or choosing a paid fallback.
 
@@ -177,7 +177,7 @@ Per-hunk controls use `diffEditor.codeLens`, enabled by default; an explicit use
 Anvil requires a trusted local workspace because approved commands run on the host.
 
 See [the submission handoff](docs/SUBMISSION-CHECKLIST.md) for the remaining real-model, video and PDF steps.
-`WRITEUP.md` is an editable review draft with verified evidence separated from pending demonstration claims.
+`WRITEUP.md` is the source of the submitted PDF write-up; `python3 scripts/export-writeup.py` regenerates it.
 
 ## Fixed tasks (Round 1)
 

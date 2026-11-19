@@ -22,7 +22,7 @@ Tool approval drives review. Before a proposed edit executes, Anvil opens a nati
 
 Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request. A provider's per-minute rate limit (HTTP 429) is different: Anvil waits the time the provider asks for, then continues the same TrueForge session with a short continue message, without resending the original task. The model can still choose to repeat a tool call.
 
-Four frequent tools are preloaded; other tools are discovered on demand. The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. These features are configured, but their usefulness in the final real-model task has not yet been demonstrated.
+Four frequent tools are preloaded; the rest use TrueForge's deferred tool loading and are discovered on demand. In the recorded Task B session the agent calls list_tools, then call_tool for assemble_context, which keeps unused tool schemas out of the prompt (visible at 2:09-2:17). The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. Subagents were switched off for the free-tier runs to stay within Gemini's per-minute quota, and no recorded task grew large enough to trigger compaction, so neither appears in the video.
 
 ## 4. How context is selected
 
@@ -61,6 +61,8 @@ Timestamps refer to the demo video. In the recording, a scripted Extension Host 
 ## 7. Tools used
 
 TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extension APIs; Vitest and DOM regression tests; vsce packaging; pallets/flask as the task repository. Runtime dependencies and source licensing are documented in the repository.
+
+AI coding assistants: Claude Code (Anthropic) was used throughout for implementation, tests, debugging and documentation; the repository's CLAUDE.md and docs/TEAMMATE-PROMPT.md are the instructions we gave it. Claude was also used to review this write-up against the brief. All design decisions, rehearsals and the recorded runs were checked by the team.
 
 ## 8. Known limitations and next steps
 

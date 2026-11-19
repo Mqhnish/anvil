@@ -40,4 +40,4 @@ The e2e and editor suites allocate their own mock ports and isolated provider na
 
 ## PDF export
 
-`python3 scripts/export-writeup.py` writes `output/pdf/anvil-writeup-draft.pdf` using ReportLab. Use the bundled Python runtime or install ReportLab in a virtual environment. Keep the draft label until the pending evidence is filled and verified.
+`python3 scripts/export-writeup.py` writes `output/pdf/anvil-writeup.pdf` using ReportLab. Use the bundled Python runtime or install ReportLab in a virtual environment. Replace `VIDEO_LINK` in `WRITEUP.md` before exporting, and check the PDF is 1-3 pages.
