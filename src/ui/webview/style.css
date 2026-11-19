@@ -74,6 +74,8 @@ header#status { display: block; padding: 14px 16px 10px; }
 #tfChip.ok::before { background: var(--vscode-testing-iconPassed); }
 #tfChip.bad { color: var(--vscode-errorForeground); }
 main#log { padding: 14px 16px; min-height: 0; gap: 12px; }
+/* Cards keep their height and the log scrolls; without this, flex shrinks overflowing cards to thin lines. */
+main#log > * { flex-shrink: 0; }
 .welcome { padding: 2px 0; }
 .forge-print {
   display: grid; place-items: center; height: clamp(72px, 18vh, 134px); overflow: hidden;
