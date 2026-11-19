@@ -125,8 +125,8 @@ them. It is not used for the demo video's model.
 
 Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
 Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
-The real Gemini inline edit passes 13 behavioral checks. The multi-file rehearsal hit the Free Tier token quota
-before editing; complete Tasks B/C and the recorded demo remain pending. See the test log for limitations.
+Live Gemini rehearsals verified automatic fallback, 14 inline behavior checks and resumption after a real
+56-second quota wait. The inline docstring missed one edge case. See the test log for Task B and recording status.
 
 ## Opt-in Free Tier rehearsal
 

@@ -167,3 +167,11 @@ Verified:
   retried twice (~2 s) then failed the turn; Anvil waited 11 s, continued session `01m7sq4y…`, and finished with
   the edit applied exactly once and no fallback. All 6 e2e scenarios pass.
 - Not yet run against live Gemini.
+
+## Live check of the rate-limit and fallback changes, 19 November 2026
+
+- With a 4,000-token context budget and an unbilled Gemini 3.5 Flash-Lite project, Task B hit a genuine per-minute limit, displayed a 56-second wait, then resumed making tool calls in the same TrueForge session. Repeated search results were shortened in the trace. Gemini identified the implementation, tests and documentation but ended with a plan and zero edit reviews. The verification correctly failed.
+- In two Task C runs, the local primary returned 503 and the real Gemini fallback proposed an edit. All 14 behavior checks passed both times. Its docstring omitted the empty string, so the full check failed.
+- The Task B verifier now invokes Flask's built-in CLI group with a test app. Flask's application-specific CLI group, previously used by this check, does not contain the built-ins. The rehearsal timeout for B is ten minutes to accommodate provider waits.
+
+- A fresh Task B run with revised edit instructions and no example Flask file names reached the configured 20-iteration limit while gathering context, with zero reviewed edits. The runner now reports that limit explicitly and keeps a normal chat available for follow-up. A new fallback session also starts with fresh lookup history, so the fallback can read results that only the primary saw.

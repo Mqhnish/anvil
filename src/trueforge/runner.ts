@@ -110,7 +110,7 @@ export class TurnRunner {
     this.running = true;
     this.cancelRequested = false;
     this.o.decisions.beginTurn();
-    const signal = this.o.decisions.signal;
+    let signal = this.o.decisions.signal;
     const cb = this.o.callbacks;
     const models = [this.o.primaryModel, ...(this.o.fallbackModel && this.o.fallbackModel !== this.o.primaryModel ? [this.o.fallbackModel] : [])];
     let attempts = 0;
@@ -128,6 +128,11 @@ export class TurnRunner {
           cb.onNotice?.('warn', `Primary model "${models[0]}" failed (${lastError}). Falling back to "${model}" automatically.`);
           this.resetSession();
           continuing = false;
+          // A fresh model session has never seen the primary session's tool results.
+          if (!this.cancelRequested) {
+            this.o.decisions.beginTurn();
+            signal = this.o.decisions.signal;
+          }
         }
         for (let attempt = 0; attempt <= this.o.maxRetries; attempt++) {
           attempts++;
@@ -146,6 +151,12 @@ export class TurnRunner {
             if (r.status === 'done') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             if (r.status === 'cancelled') return { ...r, modelUsed: model, usedFallback, attempts, sessionId: sid };
             lastError = r.message ?? 'unknown error';
+            if (/iteration limit/i.test(lastError)) {
+              const progress = this.o.decisions.hasSideEffects
+                ? 'Review the changes already applied before continuing.'
+                : 'This run applied no edits and ran no commands.';
+              return { status: 'error', message: `The session reached its iteration limit. ${progress} ${opts.ephemeral ? 'Start another inline edit to continue.' : 'Send a follow-up in this chat to continue.'}`, modelUsed: model, usedFallback, attempts, sessionId: sid };
+            }
             const waitMs = rateLimitWaitMs(lastError);
             if (waitMs !== undefined && rateLimitWaits < MAX_RATE_LIMIT_WAITS) {
               rateLimitWaits++;

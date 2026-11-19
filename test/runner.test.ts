@@ -70,12 +70,28 @@ describe('turn lifecycle', () => {
     expect(sessions.createTurnStream).toHaveBeenCalledTimes(1);
     expect(result.usedFallback).toBe(false);
   });
-  it('still falls back automatically when the primary fails before a side effect', async () => {
+  it('keeps the session available to continue after its iteration limit', async () => {
     const { runner, sessions } = fixture();
-    sessions.createTurnStream.mockImplementationOnce(async () => events([{ id: 'error', type: 'turn.done', state: { status: 'error', message: 'model unavailable' } }]));
+    sessions.createTurnStream.mockImplementationOnce(async () => events([
+      { id: 'limit', type: 'turn.done', state: { status: 'error', message: 'You have reached iteration limit of 20' } },
+    ]));
+    const stopped = await runner.run('change');
+    expect(stopped.message).toContain('iteration limit');
+    expect(stopped.usedFallback).toBe(false);
+    expect((await runner.run('Continue')).sessionId).toBe(stopped.sessionId);
+    expect(sessions.create).toHaveBeenCalledTimes(1);
+  });
+  it('still falls back automatically when the primary fails before a side effect', async () => {
+    const { runner, sessions, decisions } = fixture();
+    let primaryScope: AbortSignal | undefined;
+    sessions.createTurnStream.mockImplementationOnce(async () => {
+      primaryScope = decisions.signal;
+      return events([{ id: 'error', type: 'turn.done', state: { status: 'error', message: 'model unavailable' } }]);
+    });
     const result = await runner.run('change');
     expect(result.status).toBe('done');
     expect(result.usedFallback).toBe(true);
+    expect(decisions.signal).not.toBe(primaryScope);
     expect(result.modelUsed).toBe('fallback/model');
   });
 });

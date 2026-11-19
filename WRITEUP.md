@@ -22,7 +22,7 @@ Anvil hosts a local MCP server with a per-launch secret. Its tools expose file r
 
 Tool approval drives review. Before a proposed edit executes, Anvil opens a native diff and collects hunk decisions. The executing MCP handler applies only accepted hunks. Decisions are tied to the baseline and proposal; intervening file changes require a fresh review. Undo restores the previous content and removes newly created files when appropriate.
 
-Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request. A provider's per-minute rate limit (HTTP 429) is different: Anvil waits the time the provider asks for, then continues the same TrueForge session with a short continue message, so nothing is redone even after accepted edits.
+Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request. A provider's per-minute rate limit (HTTP 429) is different: Anvil waits the time the provider asks for, then continues the same TrueForge session with a short continue message, without resending the original task. The model can still choose to repeat a tool call.
 
 Four frequent tools are preloaded; other tools are discovered on demand. The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. These features are configured, but their usefulness in the final real-model task has not yet been demonstrated.
 
@@ -40,9 +40,9 @@ The trade-off is speed and explainability versus semantic recall. Retrieval uses
 
 All provider credentials stay in TrueForge or the git-ignored local configuration. The extension can select any supported configured model, plus a distinct fallback. The example configuration includes OpenAI, Gemini and a local OpenAI-compatible endpoint.
 
-Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, an 8,000-token context budget and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
+Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, 4,000- and 8,000-token context budgets and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
 
-The real inline edit passed 13 behavior checks; its docstring still omitted the empty-string case. Task B exhausted the free input-token-per-minute quota before making edits. Model calls stopped at that error. The real fallback run and recorded demonstration remain pending; scripted tests are separate evidence.
+The live fallback rehearsal switched from a local HTTP 503 to Gemini and applied a reviewed inline edit. All 14 behavior checks passed, but its docstring omitted the empty-string case. During Task B, Anvil resumed in the same session after a 56-second quota wait. Gemini identified three relevant files and stopped at a plan. A second run reached its 20-iteration limit before editing.
 
 ## 6. Scorecard
 
@@ -55,7 +55,7 @@ Evidence status below distinguishes implementation checks from the required reco
 | A3 Streaming and cancellation | Streaming/e2e checks; actual Extension Host review cancellation passes | Record responsive cancellation on video |
 | B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
 | B2 Diff safety | Baseline protection; actual per-hunk accept/reject and WorkspaceEdit undo | Show individual accepted/rejected hunks on video |
-| B3 Resilience | Dead primary, retry, fallback, no-fallback and rate-limit-wait e2e cases pass | Repeat with a real fallback model |
+| B3 Resilience | Dead primary, retry, fallback, no-fallback and rate-limit-wait e2e cases pass | Record the verified live fallback |
 | B4 TrueForge depth | Agent spec, MCP registration and approval loop exercised | Show the TrueForge session and explain configured features |
 | C1 Video | Rehearsal script prepared | Record a legible video within the required limit |
 | C2 Write-up | Architecture, context strategy, verification and limitations documented | Fill live model details, video link and timestamps |
@@ -66,6 +66,6 @@ TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extensi
 
 ## 8. Known limitations and next steps
 
-The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The separate real-model inline rehearsal used headless review acceptance, not editor interaction. Task B failed on free quota; full Tasks A/B/C and the recorded demonstration remain pending.
+The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The separate real-model inline rehearsal used headless review acceptance, not editor interaction. The recorded editor demonstration remains pending.
 
 Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.
