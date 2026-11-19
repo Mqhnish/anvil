@@ -290,3 +290,10 @@ button:not(.title):not(.example) { transition: transform 120ms var(--ease-out), 
   #statusLine.running { background: none; -webkit-text-fill-color: CanvasText; }
   .card.review:not(.tool), .card.approval, .card.question { animation: none; }
 }
+
+/* Empty state: the forge illustration fills the space left under the tasks, and only that space.
+   It shrinks with the panel and disappears when there's no room, so it never pushes content down. */
+.welcome { flex: 1 0 auto; display: flex; flex-direction: column; }
+.forge-print { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; padding: 16px 0 8px; color: var(--vscode-descriptionForeground); }
+.forge-print svg { width: min(100%, 240px); max-height: 100%; }
+@container (max-height: 72px) { .forge-print svg { display: none; } }
