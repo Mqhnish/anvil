@@ -263,7 +263,8 @@
     "mock-model": "node scripts/mock-model.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "vscode:prepublish": "npm run build",
-    "test:editor": "npm run build && node scripts/test-editor.mjs"
+    "test:editor": "npm run build && node scripts/test-editor.mjs",
+    "test:live": "npm run build && node dist/liveVerification.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

@@ -125,7 +125,23 @@ them. It is not used for the demo video's model.
 
 Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
 Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
-A complete real-model run and the recorded demo still need verification.
+The real Gemini inline edit passes 13 behavioral checks. The multi-file rehearsal hit the Free Tier token quota
+before editing; complete Tasks B/C and the recorded demo remain pending. See the test log for limitations.
+
+## Opt-in Free Tier rehearsal
+
+Follow [the free model setup](docs/FREE-MODEL-SETUP.md) first. Prepare `tmp/flask-verification-venv` with
+`scripts/flask-test-requirements.txt`, start TrueForge with the configured Gemini model, then run:
+
+```bash
+npm run test:live -- --free-tier-confirmed --only a
+```
+
+Use `--only b` or `--only c` for the other tasks; omitting it runs A/B/C in order and stops at the first failure.
+This is an explicit real API test: confirm Free Tier eligibility and disabled billing before passing the flag.
+The harness uses disposable Flask copies, the production TrueForge runner, automatic hunk acceptance, no
+subagents, and no model retries. It independently verifies behavior and saves local traces under ignored
+`output/verification/`. It permits only the focused CLI test command. It does not record the required editor video.
 
 ## Actual editor regression tests
 

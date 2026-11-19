@@ -117,3 +117,27 @@ All 58 existing tests in `tests/test_cli.py` pass with the verification dependen
 `scripts/flask-test-requirements.txt`. Pytest 9.2 could not collect this checkout because its internal `notset`
 import was removed; pytest 8.4.2 and Click 8.1.8 provide the verified baseline. The demo setup now uses that file.
 This is baseline verification, not evidence of completed model-generated Task B changes.
+
+## Live Free Tier rehearsal - 19 November 2026
+
+After the user confirmed Free Tier and disabled billing, the production TurnRunner and MCP tools were exercised
+against disposable Flask 3.1.3 copies. The original Flask checkout and provider credentials were not committed.
+
+- `gemini-2.5-flash-lite` returned 404, explicitly unavailable to new users. Google's suggested replacement,
+  `gemini-3.5-flash-lite`, was checked against official Standard Free Tier pricing before updating local setup and examples.
+- Task A used the same inline message format as the extension, with automatic headless review acceptance.
+  Gemini proposed the edit, approval completed and the file changed. Ten false-value cases and three true-value
+  cases passed. The resulting docstring lists explicit false literals but omits the empty-string case, so the
+  entire submission criterion is not claimed complete. This run is not a real editor recording.
+- The exact Task B prompt, without file names, called context assembly and discovered CLI locations, but repeated
+  searches exhausted Google's 250,000 free input tokens per minute before any edit or command. The 429 response
+  was recorded locally and all further model calls stopped. Task C was not run.
+- Instructions now discourage identical repeated searches and call out unset/empty values when documenting
+  boolean semantics. These prompt changes have not been evaluated against the live model after the quota stop.
+- The opt-in `npm run test:live` command retains prompts, tool events, outcomes and verification output under
+  ignored `output/verification/`, with a 20-iteration limit, four-minute turn timeout and no retries or subagents.
+  Future runs use a smaller 4,000-token context pack and also require the inline docstring to mention the empty string.
+- Typecheck, all 63 tests across 10 files and production/test bundles pass after the harness changes. The first
+  restricted test attempt could not bind localhost sockets; rerunning with local networking allowed passed.
+
+Pricing reference checked during the run: https://aistudio.google.com/docs/pricing.

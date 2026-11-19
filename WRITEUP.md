@@ -1,6 +1,6 @@
 # Anvil - coding with context and review
 
-Round 1 review draft - live-model demonstration and recording still pending.
+Round 1 review draft - partial live-model verification; full demonstration and recording pending.
 
 ## 1. Team
 
@@ -40,7 +40,9 @@ The trade-off is speed and explainability versus semantic recall. Retrieval uses
 
 All provider credentials stay in TrueForge or the git-ignored local configuration. The extension can select any supported configured model, plus a distinct fallback. The example configuration includes OpenAI, Gemini and a local OpenAI-compatible endpoint.
 
-Verified runs used a local scripted mock model, with no paid model calls. A real primary/fallback pair has not been configured for the final demonstration. Record the exact model IDs, providers, execution location and measured or clearly estimated cost here after the live run. Do not describe scripted responses as model-generated task solutions.
+Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, an 8,000-token context budget and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
+
+The real inline edit passed 13 behavior checks; its docstring still omitted the empty-string case. Task B exhausted the free input-token-per-minute quota before making edits. Model calls stopped at that error. The real fallback run and recorded demonstration remain pending; scripted tests are separate evidence.
 
 ## 6. Scorecard
 
@@ -48,7 +50,7 @@ Evidence status below distinguishes implementation checks from the required reco
 
 | Criterion | Verified evidence | Still required |
 |---|---|---|
-| A1 Inline edit | Shortcut/native diff smoke check; per-hunk commands in real VS Code tests | Exact Task A and recorded timestamp |
+| A1 Inline edit | Real Gemini edit passes 13 behavior checks; native diff tested separately | Complete empty-string docstring; record Task A |
 | A2 Agent mode | TrueForge/MCP tool loop exercised headlessly | Real-model Task B: discover and edit at least three files |
 | A3 Streaming and cancellation | Streaming/e2e checks; actual Extension Host review cancellation passes | Record responsive cancellation on video |
 | B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
@@ -64,6 +66,6 @@ TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extensi
 
 ## 8. Known limitations and next steps
 
-The automated suite and headless e2e verify extension behavior with scripted responses. Interactive smoke checks cover the panel and macOS inline shortcut. Five actual VS Code Extension Host scenarios now pass: individual CodeLens accept/reject with partial application, undo, review cancellation, a subsequent task, and closing a diff. Those tests invoke the real editor commands; full real-model Tasks A/B/C and the recorded demonstration remain pending.
+The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The separate real-model inline rehearsal used headless review acceptance, not editor interaction. Task B failed on free quota; full Tasks A/B/C and the recorded demonstration remain pending.
 
 Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.

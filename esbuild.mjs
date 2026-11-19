@@ -36,6 +36,7 @@ const headlessOptions = {
 const editorTestsOptions = { ...headlessOptions, entryPoints: ['src/host/editorTests.ts'], outfile: 'dist/editorTests.js' };
 
 const e2eOptions = { ...headlessOptions, entryPoints: ['src/host/e2eMain.ts'], outfile: 'dist/e2e.js' };
+const liveOptions = { ...headlessOptions, entryPoints: ['src/host/liveVerification.ts'], outfile: 'dist/liveVerification.js' };
 
 mkdirSync('dist/webview', { recursive: true });
 cpSync('src/ui/webview', 'dist/webview', { recursive: true });
@@ -45,12 +46,14 @@ if (watch) {
   const ctx2 = await esbuild.context(headlessOptions);
   const ctx3 = await esbuild.context(e2eOptions);
   const ctx4 = await esbuild.context(editorTestsOptions);
+  const ctx5 = await esbuild.context(liveOptions);
   watchFiles('src/ui/webview', { recursive: true }, () => cpSync('src/ui/webview', 'dist/webview', { recursive: true }));
-  await Promise.all([ctx.watch(), ctx2.watch(), ctx3.watch(), ctx4.watch()]);
+  await Promise.all([ctx.watch(), ctx2.watch(), ctx3.watch(), ctx4.watch(), ctx5.watch()]);
   console.log('watching…');
 } else {
   await esbuild.build(extensionOptions);
   await esbuild.build(headlessOptions);
   await esbuild.build(e2eOptions);
   await esbuild.build(editorTestsOptions);
+  await esbuild.build(liveOptions);
 }
