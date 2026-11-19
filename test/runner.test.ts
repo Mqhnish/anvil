@@ -119,7 +119,12 @@ describe('provider rate limits', () => {
     expect(rateLimitWaitMs(gemini429)).toBe(39707);
     expect(rateLimitWaitMs('Request failed (429): Too Many Requests')).toBe(60500);
     expect(rateLimitWaitMs('rate limit reached. Retry-After: 7')).toBe(7500);
-    expect(rateLimitWaitMs('429 quota exceeded, retry in 900s')).toBe(90500); // capped
+    expect(rateLimitWaitMs('429 quota exceeded, retry in 120s')).toBe(90500); // capped
+    expect(rateLimitWaitMs('429 quota exceeded, retry in 900s')).toBeUndefined(); // long-window quota
+    expect(rateLimitWaitMs('Request failed (429): {"type":"FreeUsageLimitError","message":"Free usage limit reached. Subscribe to keep going"}')).toBeUndefined();
+    expect(rateLimitWaitMs('429: insufficient credits for this request')).toBeUndefined();
+    expect(rateLimitWaitMs(gemini429 + ' Please check your plan and billing details.')).toBe(39707);
+    expect(rateLimitWaitMs('429 tokens per minute limit reached; subscribe to a paid plan for more. retry in 20s')).toBe(20500);
     expect(rateLimitWaitMs('429: requests per day limit exceeded')).toBeUndefined();
     expect(rateLimitWaitMs('model unavailable (503)')).toBeUndefined();
   });

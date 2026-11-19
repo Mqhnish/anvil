@@ -452,16 +452,22 @@ export const CONTINUE_AFTER_RATE_LIMIT =
 /**
  * How long to wait before continuing after a provider rate limit, or undefined if the error is not a
  * short-term rate limit. Honours "retry in Ns" / "retry-after: N" hints (Gemini, OpenAI); defaults to 60s,
- * capped at 90s. Daily quotas return undefined: waiting a minute will not help.
+ * capped at 90s. Daily quotas, exhausted free allowances and hints over five minutes return undefined:
+ * waiting a minute will not help, so the runner falls back or reports the error instead.
  */
 export function rateLimitWaitMs(msg: string): number | undefined {
   const m = msg.toLowerCase();
   if (!/\b429\b|rate.?limit|quota|resource.?exhausted|too many requests/.test(m)) return undefined;
   if (/per.?day|daily|requests? per day|rpd\b/.test(m)) return undefined;
+  // Account-level limits (free allowance used up, credits or a plan needed) don't reset in a minute either.
+  const perMinute = /per.?minute|per.?min\b|\brpm\b|\btpm\b/.test(m);
+  if (!perMinute && /free.?usage.?limit|usage limit reached|insufficient (?:credits|balance|funds)|out of credits|subscribe to/.test(m)) return undefined;
   const hint = /retry (?:in|after) ([\d.]+)\s*(ms|s)\b/.exec(m) ?? /retry-after:?\s*([\d.]+)()/.exec(m);
   let secs = 60;
   if (hint) secs = hint[2] === 'ms' ? Number(hint[1]) / 1000 : Number(hint[1]);
   if (!Number.isFinite(secs)) secs = 60;
+  // A provider asking for more than five minutes is describing a long-window quota, not a per-minute limit.
+  if (secs > 300) return undefined;
   return Math.round(Math.min(Math.max(secs, 1), 90) * 1000) + 500;
 }
 
