@@ -143,7 +143,14 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     panel.post({ type: 'user', text });
     setRunning(true);
     try {
-      const r = await svc.runner.run(text);
+      // First message of a new agent session: assemble the context pack up front (shown as a card) and send it
+      // with the task, so retrieval is model-independent. Follow-ups continue from the session's history.
+      let request = text;
+      if (!svc.runner.currentSessionId) {
+        const pack = await mcp.prepareContext(text).catch(() => '');
+        if (pack) request = `${text}\n\n---\nAnvil assembled this context pack for the task before your first turn. Start from it; do not call assemble_context again for the same task.\n\n${pack}`;
+      }
+      const r = await svc.runner.run(request);
       panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts });
       if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
     } catch (e) {

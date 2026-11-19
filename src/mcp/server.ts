@@ -76,6 +76,18 @@ export class WorkspaceMcpServer {
   get port(): number { return this._port; }
   get url(): string { return `http://127.0.0.1:${this._port}/mcp`; }
 
+  /**
+   * Run the same retrieval as `assemble_context` before the first turn of an agent task, so every task starts from a
+   * budgeted, explained context pack whether or not the model chooses to call the tool. Shows the pack card and
+   * returns the rendered pack for the request.
+   */
+  async prepareContext(task: string): Promise<string> {
+    const pack = await this.retriever.assemble(task, this.opts.budgetTokens());
+    this.lastPack = pack;
+    this.opts.events?.onContextPack?.(pack);
+    return renderPack(pack);
+  }
+
   async start(): Promise<void> {
     if (this.httpServer) return;
     this.httpServer = http.createServer((req, res) => void this.handle(req, res));
@@ -253,7 +265,7 @@ export class WorkspaceMcpServer {
       return this.text(res.map(r => `${r.path}:${r.sym.startLine}-${r.sym.endLine}  ${r.sym.kind} ${r.sym.container ? r.sym.container + '.' : ''}${r.sym.name}`).join('\n'));
     }));
 
-    server.registerTool(TOOL_NAMES.assemble, {
+    server.registerTool(TOOL_NAMES.assemble, { // see also prepareContext(), which runs the same retrieval up front
       title: 'Assemble context',
       description: 'Build a budgeted context pack for a task: ranks workspace files by lexical relevance (BM25 over symbol-level chunks), path match, open editors, explicit @file/@symbol mentions, and neighbour expansion (tests, docs, imports). Returns the chosen files with REASONS and the relevant symbol bodies, plus what was skipped. Call this FIRST for any task that may touch files you have not seen; then read_file only what the pack did not already include.',
       inputSchema: { task: z.string().describe('the user task, verbatim or paraphrased, including any @mentions'), budget_tokens: z.number().int().optional().describe('token budget; default from settings'), mentions: z.array(z.string()).optional().describe('extra @file or @symbol mentions') },

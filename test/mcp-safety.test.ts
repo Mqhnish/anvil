@@ -82,3 +82,20 @@ it('collapses an identical repeated search within a turn, but not a changed resu
   const nextTurn = await call();
   expect(nextTurn).not.toContain('Same result');        // new turn → full result again
 });
+
+it('prepares a context pack up front, announcing it like the tool does', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'anvil-pack-'));
+  cleanups.push(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, 'src'));
+  await fs.writeFile(path.join(root, 'src/config_loader.py'), 'def load_config(path):\n    return open(path).read()\n');
+  await fs.writeFile(path.join(root, 'src/unrelated.py'), 'def add(a, b):\n    return a + b\n');
+  const host = new HeadlessHost(root, { log: () => {} });
+  const seen: string[][] = [];
+  const server = new WorkspaceMcpServer({ host, decisions: new DecisionStore(), index: new RepoIndex(host), budgetTokens: () => 1000,
+    events: { onContextPack: p => seen.push(p.chosen.map(c => c.path)) } });
+  const text = await server.prepareContext('change load_config so it reads the config file');
+  expect(seen).toHaveLength(1);
+  expect(seen[0][0]).toBe('src/config_loader.py');
+  expect(text).toContain('src/config_loader.py');
+  expect(server.lastPack?.chosen[0].path).toBe('src/config_loader.py');
+});
