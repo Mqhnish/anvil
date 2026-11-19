@@ -207,3 +207,25 @@ Esc keybinding (500f46c), context pack before the first agent turn (06b0dc2), hu
 changed `src/flask/json/provider.py` to serialise timedelta globally (out of scope), one looped on 56 searches with
 no edit (TrueForge also crashed once mid-turn and was restarted on the same SQLite file), one broke
 `TestRoutes::test_all_methods`. `flask --help` on the chosen B workspace lists `config`.
+
+## Windows 11 verification and robustness changes - 20 November 2026
+
+Environment: Windows 11, Ryzen 5 5600U (CPU only, 16 GB), Node 22.16, VS Code 1.146, TrueForge 0.185.1 on its own
+port and SQLite file, Flask 3.1.3 at `../flask` (22d9247).
+
+- `npm run check`: typecheck, 78 tests (including the Flask retrieval tests) and build pass.
+- `npm run e2e`: all 7 scenarios pass, including the new "edit written as text → nudge → real reviewed edit".
+- `npm run test:editor`: all 5 Extension Host scenarios pass on Windows (per-hunk CodeLens, undo, cancelled review,
+  recovery, closing the diff). It now launches `Code.exe` on Windows by default.
+
+Changes verified:
+- Text tool calls: the runner detects a known tool written as JSON text and nudges the same session (max 2).
+- Retrieval: for "add a new X" tasks the extension-point file leads (cli.py, with shell_command and routes_command
+  as examples), then its tests and docs. Task B at a 4,000-token budget now packs cli.py, test_cli.py, docs/cli.rst.
+- Panel: deferred-loaded tools carry an "on demand" badge; `list_tools` reads "Look up tools · deferred loading".
+- Live harness: `--model`, `--budget`, `--timeout-min`, `--cost-confirmed`, Windows venv path.
+
+Local model check (not a recorded run): `qwen2.5-coder:7b` (16k context) through Ollama on CPU, Task A. Each reply
+took 0.5-4 minutes. The model wrote `propose_edit` as a JSON code block in all three replies; Anvil detected it and
+nudged twice, then stopped. No edit was made and the Flask copy was untouched. This model cannot make native tool
+calls through Ollama's OpenAI endpoint, so it cannot drive Anvil. Setup notes for local models are in the README.

@@ -35,7 +35,7 @@ assembly) and keeps the editor safe (hunk-by-hunk review, undo, cancellation, mo
 |---|---|---|---|
 | 1 | **Inline edit** | `src/edit/inlineEdit.ts` | Select → `Ctrl+Alt+I` (`Ctrl+Cmd+I` on Mac) → instruction → the agent calls `propose_edit` → diff opens in the editor with per-hunk Accept/Reject |
 | 2 | **Agent mode** | `src/ui/panel.ts`, `src/trueforge/runner.ts` | Panel in the Anvil activity bar; one request drives a TrueForge tool loop until done. Files are discovered, never named |
-| 3 | **Context assembly** | `src/context/*` | `@file`/`@symbol` mentions + automatic retrieval (BM25 over symbol chunks, path/symbol-name match, open editors, test/doc/import neighbours) packed under a token budget, with a *reason per file* shown in the panel |
+| 3 | **Context assembly** | `src/context/*` | `@file`/`@symbol` mentions + automatic retrieval (BM25 over symbol chunks, path/symbol-name match, open editors, test/doc/import neighbours) packed under a token budget, with a *reason per file* shown in the panel. For "add/create a new X" tasks it leads with the file that already holds several X's (e.g. `run_command`, `shell_command`, `routes_command` in `cli.py`), includes one as the pattern to copy, then that file's tests and docs |
 | 4 | **Diff review** | `src/edit/reviewer.ts`, `hunks.ts` | Native diff editor + CodeLens per hunk; nothing is written until *Finish review*; applied via `WorkspaceEdit` (Cmd+Z) plus `Anvil: Undo Last Applied Change` |
 | 5 | **Streaming & cancellation** | `runner.ts` | SSE deltas rendered as they arrive; `Esc`/Cancel calls `sessions.cancel`; writes happen only inside an approved tool call, pending reviews are denied and running commands are stopped on cancellation; earlier accepted edits remain applied |
 
@@ -43,6 +43,16 @@ Resilience (Task C): model/transport errors are retried with exponential backoff
 configured **fallback model** automatically when no edit or command has run. If a turn fails after an accepted
 edit or command, it stops with a clear message instead of replaying side effects. Earlier accepted edits remain
 applied; use undo to revert them. Verified by `npm run e2e` (see below).
+
+Tool calls written as text: some models (especially small local ones) occasionally answer with a `propose_edit`
+call written as JSON text instead of calling the tool, so nothing would run. Anvil detects this and sends the same
+TrueForge session a short nudge to make the real call (at most twice; nothing is replayed). The extension never runs
+the text itself, so every action still goes through TrueForge's tool loop and the hunk review. A model that only ever
+answers in text (we saw this with `qwen2.5-coder:7b` through Ollama) cannot drive Anvil; pick one with native tool
+calling.
+
+Deferred tool loading is visible in the panel: tools TrueForge loads on demand through `call_tool` carry an
+*on demand* badge, and the `list_tools` lookup is shown as *Look up tools · deferred loading*.
 
 ## Setup from a clean clone
 
@@ -113,9 +123,11 @@ For the fixed Flask tasks, install `scripts/flask-test-requirements.txt` in a vi
 editable Flask checkout. The pinned pytest/Click versions avoid unrelated failures in the Flask 3.1.3 baseline.
 
 ```bash
-npm test                 # 63 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
+npm test                 # 78 tests: retrieval (incl. Task B on ../flask), edit blocks, MCP safety, cancellation, commands,
+                         #   text tool-call recovery, panel rendering, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):
-                         #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation
+                         #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation,
+                         #   rate-limit continue, edit written as text → nudge → real reviewed edit
 node dist/headless.js assemble --root ../flask "Add a new built-in CLI command flask config …"   # print a context pack
 ```
 
@@ -138,6 +150,14 @@ npm run test:live -- --free-tier-confirmed --only a
 ```
 
 Use `--only b` or `--only c` for the other tasks; omitting it runs A/B/C in order and stops at the first failure.
+Any model configured in TrueForge works: `--model <provider/model> --cost-confirmed` (or `ANVIL_LIVE_MODEL`), with
+`--budget <tokens>` for the context pack and `--timeout-min <n>` for slow models. Example with a local Ollama model:
+`npm run test:live -- --model ollama/qwen2-5-coder-7b-16k --cost-confirmed --only a --timeout-min 20`.
+
+Local models on a CPU need two settings: start TrueForge with `MODEL_HTTP_HEADERS_TIMEOUT_MS=300000` (its default
+gives up after about 20 s, before a CPU model has read Anvil's ~3k-token prompt), and give the Ollama model a larger
+context than its 4,096-token default (`PARAMETER num_ctx 16384` in a Modelfile). On Windows the harness uses
+`tmp\flask-verification-venv\Scripts\python.exe`.
 This is an explicit real API test: confirm Free Tier eligibility and disabled billing before passing the flag.
 The harness uses disposable Flask copies, the production TrueForge runner, automatic hunk acceptance, no
 subagents, and no model retries. It independently verifies behavior and saves local traces under ignored
