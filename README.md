@@ -51,7 +51,7 @@ want to run the fixed tasks' verifications.
 
 ```bash
 git clone https://github.com/Mqhnish/anvil && cd anvil
-npm install
+npm ci
 npm run build            # bundles dist/extension.js, dist/headless.js, dist/e2e.js
 ```
 
@@ -110,7 +110,7 @@ extension loads it and fills in the model and server name from settings (`src/tr
 ## Tests
 
 ```bash
-npm test                 # 53 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
+npm test                 # 63 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):
                          #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation
 node dist/headless.js assemble --root ../flask "Add a new built-in CLI command flask config …"   # print a context pack
@@ -123,6 +123,20 @@ them. It is not used for the demo video's model.
 Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
 Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
 A complete real-model run and the recorded demo still need verification.
+
+## Submission preparation
+
+`npm run check` runs typecheck, tests and the build. `npm run package` builds the extension and creates
+`anvil-0.1.0.vsix`; install it through VS Code's **Extensions: Install from VSIX** command. Packaging uses a
+runtime-only allowlist, so local credentials, tests, maps and development files are excluded.
+
+The panel includes setup guidance and works with VS Code dark, light and high-contrast theme tokens.
+Select a model, describe a task or choose an example prompt. The draft stays in the composer if setup fails.
+Per-hunk controls use `diffEditor.codeLens`, enabled by default; an explicit user setting can override it.
+Anvil requires a trusted local workspace because approved commands run on the host.
+
+See [the submission handoff](docs/SUBMISSION-CHECKLIST.md) for the remaining real-model, video and PDF steps.
+`WRITEUP.md` is an editable review draft with verified evidence separated from pending demonstration claims.
 
 ## Fixed tasks (Round 1)
 

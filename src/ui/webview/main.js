@@ -10,6 +10,14 @@
   const tfChip = document.getElementById('tfChip');
   const sessionChip = document.getElementById('sessionChip');
   const mentions = document.getElementById('mentions');
+  const welcome = document.getElementById('welcome');
+  const setup = document.getElementById('setup');
+  let setupCommand = 'anvil.startTrueForge';
+  document.getElementById('setupAction').addEventListener('click', () => vscode.postMessage({ type: 'command', command: setupCommand }));
+  document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.prompt; input.focus(); }));
+  function showActivity() { welcome.remove(); }
+  function finishTools() { toolCards.forEach(c => { if (c.classList.contains('running')) { c.classList.remove('running'); c.querySelector('.title').appendChild(el('span', 'badge', 'not run')); } }); toolCards.clear(); lastToolCardByName.clear(); }
+
 
   let running = false;
   let currentAssistant = null; // element receiving deltas for thread 'main'
@@ -39,13 +47,15 @@
 
   function card(kind, title, body, collapsed) {
     const c = el('div', 'card ' + kind + (collapsed ? ' collapsed' : ''));
-    const t = el('div', 'title');
+    const t = el('button', 'title');
+    t.type = 'button'; t.setAttribute('aria-expanded', String(!collapsed));
     t.innerHTML = title;
-    t.addEventListener('click', () => c.classList.toggle('collapsed'));
+    t.addEventListener('click', () => { c.classList.toggle('collapsed'); t.setAttribute('aria-expanded', String(!c.classList.contains('collapsed'))); });
     c.appendChild(t);
     const b = el('div', 'body');
     if (body !== undefined) b.textContent = body;
     c.appendChild(b);
+    showActivity();
     log.appendChild(c);
     scroll();
     return c;
@@ -63,6 +73,7 @@
   function setRunning(r, text) {
     running = r;
     sendBtn.disabled = r;
+    document.getElementById('newChat').disabled = r;
     cancelBtn.classList.toggle('hidden', !r);
     statusLine.classList.toggle('running', r);
     if (text !== undefined) statusLine.textContent = text;
@@ -72,7 +83,7 @@
   function send() {
     const text = input.value.trim();
     if (!text || running) return;
-    input.value = '';
+    setRunning(true, 'Checking connection…');
     hideMentions();
     vscode.postMessage({ type: 'send', text });
   }
@@ -136,22 +147,30 @@
   window.addEventListener('message', ev => {
     const m = ev.data;
     switch (m.type) {
-      case 'reset': log.innerHTML = ''; setRunning(false, ''); break;
+      case 'reset': log.replaceChildren(welcome); finishTools(); hideMentions(); setRunning(false, 'Ready when you are'); break;
       case 'status': {
         const s = m.payload;
-        modelChip.textContent = 'model: ' + (s.model || 'not set — click to choose') + (s.fallback ? '  ⇢ ' + s.fallback : '');
-        tfChip.textContent = 'TrueForge: ' + s.trueforge;
+        modelChip.textContent = s.model || 'Choose model';
+        modelChip.title = s.model ? 'Primary: ' + s.model + (s.fallback ? '\nFallback: ' + s.fallback : '\nNo fallback configured') : 'Select a model configured in TrueForge';
+        const connected = s.trueforge === 'ok';
+        setup.classList.toggle('hidden', connected && !!s.model);
+        document.getElementById('setupTitle').textContent = connected ? 'Choose your model' : 'Connect to TrueForge';
+        document.getElementById('setupText').textContent = connected ? 'Add a provider in TrueForge Settings → Models, then choose it here.' : 'Start the local server, configure a model, then send your task.';
+        document.getElementById('setupAction').textContent = connected ? 'Choose model' : 'Start TrueForge';
+        setupCommand = connected ? 'anvil.selectModel' : 'anvil.startTrueForge';
+        tfChip.textContent = s.trueforge === 'ok' ? 'Connected' : s.trueforge === 'checking…' ? 'Connecting…' : 'Offline';
         tfChip.className = 'chip ' + (/^ok/.test(s.trueforge) ? 'ok' : 'bad');
         sessionChip.classList.toggle('hidden', !s.session);
         sessionChip.textContent = 'session ' + (s.session || '').slice(0, 8) + ' ↗';
         if (s.text !== undefined) statusLine.textContent = s.text;
-        if (typeof s.running === 'boolean' && s.running !== running) setRunning(s.running);
+        if (typeof s.running === 'boolean' && s.running !== running) setRunning(s.running, s.text ?? (s.running ? 'Working…' : 'Ready'));
         break;
       }
-      case 'user': { const u = el('div', 'msg user', m.text); log.appendChild(u); setRunning(true, 'sending…'); currentAssistant = null; scroll(); break; }
+      case 'user': { showActivity(); if (input.value.trim() === m.text.trim()) input.value = ''; const u = el('div', 'msg user', m.text); log.appendChild(u); setRunning(true, 'sending…'); currentAssistant = null; scroll(); break; }
       case 'delta': {
+        showActivity();
         let target;
-        if (m.threadId === 'main' || !m.threadId) target = ensureAssistant();
+        if (!threadEls.has(m.threadId)) target = ensureAssistant();
         else {
           target = threadEls.get(m.threadId);
           if (!target) { const c = card('thread', '🧵 sub-agent ' + esc(m.threadId), '', true); target = c.querySelector('.body'); target.dataset.raw = ''; threadEls.set(m.threadId, target); }
@@ -187,12 +206,12 @@
           if (m.ms !== undefined && !t.querySelector('.ms')) { const s = el('span', 'badge ms', m.ms + ' ms'); t.appendChild(s); }
           if (m.name === 'propose_edit') c.classList.add('review');
         }
-        statusLine.textContent = 'thinking…';
+        if (running) statusLine.textContent = 'thinking…';
         break;
       }
       case 'context.pack': {
         const p = m.pack;
-        const c = card('context', '🧭 Context pack — ' + p.chosen.length + ' files chosen, ' + p.usedTokens + '/' + p.budgetTokens + ' tokens, ' + p.candidatesConsidered + ' considered (' + p.tookMs + ' ms)', undefined, false);
+        const c = card('context', 'Context pack — ' + p.chosen.length + ' files chosen, ' + p.usedTokens + '/' + p.budgetTokens + ' tokens, ' + p.candidatesConsidered + ' considered (' + p.tookMs + ' ms)', undefined, false);
         const b = c.querySelector('.body');
         b.textContent = '';
         const bar = el('div', 'bar'); const fill = el('span'); fill.style.width = Math.min(100, Math.round(100 * p.usedTokens / p.budgetTokens)) + '%'; bar.appendChild(fill); b.appendChild(bar);
@@ -216,8 +235,8 @@
         const c = card('approval', '⚠️ Run command?', (m.cwd ? '(in ' + m.cwd + ')\n' : '') + '$ ' + m.command, false);
         const row = el('div', 'row');
         const ok = el('button', 'primary', 'Allow'); const no = el('button', 'danger', 'Deny');
-        ok.addEventListener('click', () => vscode.postMessage({ type: 'approve', id: m.id, allow: true }));
-        no.addEventListener('click', () => vscode.postMessage({ type: 'approve', id: m.id, allow: false }));
+        ok.addEventListener('click', () => { ok.disabled = true; no.disabled = true; vscode.postMessage({ type: 'approve', id: m.id, allow: true }); });
+        no.addEventListener('click', () => { ok.disabled = true; no.disabled = true; vscode.postMessage({ type: 'approve', id: m.id, allow: false }); });
         row.appendChild(ok); row.appendChild(no); c.appendChild(row); c.dataset.id = m.id;
         statusLine.textContent = 'waiting for approval…';
         break;
@@ -239,9 +258,11 @@
       case 'notice': card('notice ' + m.level, (m.level === 'error' ? '⛔ ' : m.level === 'warn' ? '⚠️ ' : 'ℹ️ ') + esc(m.text), undefined, true); break;
       case 'compaction': card('notice info', m.phase === 'started' ? '🗜 TrueForge is compacting the session context…' : '🗜 Context compacted', undefined, true); break;
       case 'turn.done': {
+        finishTools();
+        log.querySelectorAll('.card.question .row').forEach(row => row.replaceWith(el('div', 'why', 'No longer awaiting a response')));
         const t = el('div', 'turn-done', (m.status === 'done' ? '✓ done' : m.status === 'cancelled' ? '■ cancelled' : '✗ ' + (m.message || 'error')) + (m.model ? ' · ' + m.model : '') + (m.usedFallback ? ' (fallback)' : '') + (m.attempts > 1 ? ' · ' + m.attempts + ' attempts' : ''));
         log.appendChild(t);
-        setRunning(false, m.status === 'done' ? '' : m.message || '');
+        setRunning(false, m.status === 'done' ? 'Ready' : m.status === 'cancelled' ? 'Cancelled · accepted edits remain applied' : m.message || 'Turn failed');
         scroll();
         break;
       }

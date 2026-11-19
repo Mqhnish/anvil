@@ -73,3 +73,15 @@ typecheck and build also pass.
 The desktop automation intermittently returned stale or invalid accessibility elements during this run.
 Interactive cancellation and individual per-hunk CodeLens clicks were not reliably verified. No real model
 provider was configured in this environment, so full real-model Tasks A/B/C and the demo recording remain open.
+
+## Submission polish verification - 19 November 2026
+
+- 63 tests across 10 files pass; typecheck and all three bundles build.
+- Five TrueForge/scripted-model end-to-end scenarios pass again.
+- New panel/DOM checks cover the webview-ready handshake, preserved drafts after setup failure, command allowlisting, disposal of approvals, setup actions, main-thread rendering, escaped markup, keyboard-accessible cards and completed tool indicators.
+- The actual webview assets were visually inspected in a local browser preview with representative VS Code dark/light tokens and a narrow viewport. This is a layout preview, not an additional real-model Extension Development Host run.
+- `npm run package` creates a roughly 360 KB VSIX with 10 entries, restricted to runtime assets. Installation into an isolated VS Code profile succeeded and listed `tokenisers.anvil@0.1.0`.
+- A clean temporary source copy passed `npm ci --ignore-scripts` and produced the VSIX, with no dependency on this workspace's node_modules. The npm dependency audit reports zero vulnerabilities.
+- The 3-page review-draft PDF was exported from the eight-section write-up and visually checked. Its pending live-model/video evidence is explicit. The export source and submission checklist are in the repository; generated PDFs and VSIX files remain local artifacts.
+
+The packaging CLI is pinned. Its minimatch dependency is overridden to the patched 11.0.1 release; packaging and clean-install checks exercised that combination. No new runtime dependency was introduced. Anvil now declares trusted local workspace requirements and enables diff CodeLens by default (explicit user configuration still takes precedence).

@@ -40,14 +40,14 @@ Always run `npm run typecheck && npm test` before committing; run `npm run e2e` 
 
 ## Current state (19 Nov 2026)
 Working and verified headlessly: TrueForge session/turn streaming, MCP registration + tool calls, approval-driven
-per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 53 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Individual CodeLens actions, UI cancellation, and complete real-model Tasks A/B/C remain unverified. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
+per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 63 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Individual CodeLens actions, UI cancellation, and complete real-model Tasks A/B/C remain unverified. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
 
 ## Open work, in priority order
 1. Run Tasks A, B, C for real in VS Code with a real model; fix whatever breaks (reviewer, panel, prompt wording in
    `agent/anvil-agent.json`). Record findings in `docs/TESTLOG.md`.
 2. Record the ≤4-minute demo video (A → B → C, verification on screen, TrueForge session visible during B).
 3. Finish `WRITEUP.md` (8 headings, in order) with real timestamps; export to PDF (`docs/` has instructions).
-4. Polish: webview empty state, error toasts, `anvil.selectModel` when TrueForge has no models.
+4. Polish completed: setup/empty state, native-theme panel, accessible cards, draft preservation, webview readiness, command allowlist, CodeLens default, isolated VSIX install and clean-source package. Maintain these checks when editing the UI.
 5. Nice-to-have: show sub-agent threads more richly; `find_symbols` via language server when available.
 
 ## Conventions

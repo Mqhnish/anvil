@@ -1,8 +1,10 @@
 import { vi } from 'vitest';
+import path from 'node:path';
 export const files = new Map<string, string>();
 export class Uri {
   scheme = 'file'; query = '';
   constructor(readonly fsPath: string) {}
+  static joinPath(base: Uri, ...parts: string[]) { return new Uri(path.join(base.fsPath, ...parts)); }
   static file(p: string) { return new Uri(p); }
   static parse(p: string) { const uri = new Uri(p); uri.scheme = p.split(':')[0]; uri.query = p.split('?')[1] ?? ''; return uri; }
   toString() { return this.fsPath; }

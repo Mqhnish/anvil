@@ -1,58 +1,176 @@
 {
   "name": "anvil",
-  "displayName": "Anvil — coding agent on TrueForge",
+  "displayName": "Anvil \u2014 coding agent on TrueForge",
   "description": "Editor-native coding agent for VS Code whose agent loop runs on TrueForge. Inline edits, agent mode with budgeted context retrieval, hunk-by-hunk diff review, streaming, cancellation and model fallback.",
   "version": "0.1.0",
   "publisher": "tokenisers",
   "license": "MIT",
   "private": true,
-  "repository": { "type": "git", "url": "https://github.com/Mqhnish/anvil" },
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["AI", "Programming Languages", "Other"],
-  "activationEvents": ["onStartupFinished"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mqhnish/anvil"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "anvil.inlineEdit", "title": "Anvil: Inline Edit Selection", "category": "Anvil" },
-      { "command": "anvil.openPanel", "title": "Anvil: Open Agent Panel", "category": "Anvil" },
-      { "command": "anvil.cancel", "title": "Anvil: Cancel Running Turn", "category": "Anvil" },
-      { "command": "anvil.selectModel", "title": "Anvil: Select Model", "category": "Anvil" },
-      { "command": "anvil.selectFallbackModel", "title": "Anvil: Select Fallback Model", "category": "Anvil" },
-      { "command": "anvil.startTrueForge", "title": "Anvil: Start TrueForge (local mode) in a terminal", "category": "Anvil" },
-      { "command": "anvil.registerWithTrueForge", "title": "Anvil: (Re)register workspace MCP server with TrueForge", "category": "Anvil" },
-      { "command": "anvil.review.acceptHunk", "title": "Accept hunk", "category": "Anvil" },
-      { "command": "anvil.review.rejectHunk", "title": "Reject hunk", "category": "Anvil" },
-      { "command": "anvil.review.acceptAll", "title": "Anvil: Accept All Hunks", "category": "Anvil", "icon": "$(check-all)" },
-      { "command": "anvil.review.rejectAll", "title": "Anvil: Reject All Hunks", "category": "Anvil", "icon": "$(close-all)" },
-      { "command": "anvil.review.finish", "title": "Anvil: Finish Review (apply accepted hunks)", "category": "Anvil", "icon": "$(pass-filled)" },
-      { "command": "anvil.undoLastApply", "title": "Anvil: Undo Last Applied Change", "category": "Anvil" },
-      { "command": "anvil.showContextPack", "title": "Anvil: Show Last Context Pack", "category": "Anvil" },
-      { "command": "anvil.openSessionInTrueForge", "title": "Anvil: Open Current Session in TrueForge UI", "category": "Anvil" }
+      {
+        "command": "anvil.inlineEdit",
+        "title": "Inline Edit Selection",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.openPanel",
+        "title": "Open Agent Panel",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.cancel",
+        "title": "Cancel Running Turn",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.selectModel",
+        "title": "Select Model",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.selectFallbackModel",
+        "title": "Select Fallback Model",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.startTrueForge",
+        "title": "Start TrueForge (local mode) in a terminal",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.registerWithTrueForge",
+        "title": "(Re)register workspace MCP server with TrueForge",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.review.acceptHunk",
+        "title": "Accept hunk",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.review.rejectHunk",
+        "title": "Reject hunk",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.review.acceptAll",
+        "title": "Accept All Hunks",
+        "category": "Anvil",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "anvil.review.rejectAll",
+        "title": "Reject All Hunks",
+        "category": "Anvil",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "anvil.review.finish",
+        "title": "Finish Review (apply accepted hunks)",
+        "category": "Anvil",
+        "icon": "$(pass-filled)"
+      },
+      {
+        "command": "anvil.undoLastApply",
+        "title": "Undo Last Applied Change",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.showContextPack",
+        "title": "Show Last Context Pack",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.openSessionInTrueForge",
+        "title": "Open Current Session in TrueForge UI",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.openSettings",
+        "title": "Open Settings",
+        "category": "Anvil"
+      }
     ],
     "keybindings": [
-      { "command": "anvil.inlineEdit", "key": "ctrl+alt+i", "mac": "ctrl+cmd+i", "when": "editorTextFocus" },
-      { "command": "anvil.openPanel", "key": "ctrl+alt+a", "mac": "ctrl+cmd+a" },
-      { "command": "anvil.cancel", "key": "escape", "when": "anvil.turnRunning && !editorHasSelection && !inlineSuggestionVisible" }
+      {
+        "command": "anvil.inlineEdit",
+        "key": "ctrl+alt+i",
+        "mac": "ctrl+cmd+i",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "anvil.openPanel",
+        "key": "ctrl+alt+a",
+        "mac": "ctrl+cmd+a"
+      },
+      {
+        "command": "anvil.cancel",
+        "key": "escape",
+        "when": "anvil.turnRunning && !editorHasSelection && !inlineSuggestionVisible"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
-        { "id": "anvil", "title": "Anvil", "icon": "media/anvil.svg" }
+        {
+          "id": "anvil",
+          "title": "Anvil",
+          "icon": "media/anvil.svg"
+        }
       ]
     },
     "views": {
       "anvil": [
-        { "type": "webview", "id": "anvil.agentPanel", "name": "Agent" }
+        {
+          "type": "webview",
+          "id": "anvil.agentPanel",
+          "name": "Agent"
+        }
       ]
     },
     "menus": {
       "editor/title": [
-        { "command": "anvil.review.acceptAll", "group": "navigation@1", "when": "resourceScheme == anvil-proposed" },
-        { "command": "anvil.review.rejectAll", "group": "navigation@2", "when": "resourceScheme == anvil-proposed" },
-        { "command": "anvil.review.finish", "group": "navigation@3", "when": "resourceScheme == anvil-proposed" }
+        {
+          "command": "anvil.review.acceptAll",
+          "group": "navigation@1",
+          "when": "resourceScheme == anvil-proposed"
+        },
+        {
+          "command": "anvil.review.rejectAll",
+          "group": "navigation@2",
+          "when": "resourceScheme == anvil-proposed"
+        },
+        {
+          "command": "anvil.review.finish",
+          "group": "navigation@3",
+          "when": "resourceScheme == anvil-proposed"
+        }
       ],
       "commandPalette": [
-        { "command": "anvil.review.acceptHunk", "when": "false" },
-        { "command": "anvil.review.rejectHunk", "when": "false" }
+        {
+          "command": "anvil.review.acceptHunk",
+          "when": "false"
+        },
+        {
+          "command": "anvil.review.rejectHunk",
+          "when": "false"
+        }
       ]
     },
     "configuration": {
@@ -101,7 +219,7 @@
         "anvil.mcp.serverName": {
           "type": "string",
           "default": "vscode-workspace",
-          "description": "Name under which the workspace MCP server is registered in TrueForge (Settings → Connectors)."
+          "description": "Name under which the workspace MCP server is registered in TrueForge (Settings \u2192 Connectors)."
         },
         "anvil.agent.subagents": {
           "type": "boolean",
@@ -119,6 +237,9 @@
           "description": "Max agent-loop iterations per turn."
         }
       }
+    },
+    "configurationDefaults": {
+      "diffEditor.codeLens": true
     }
   },
   "scripts": {
@@ -127,9 +248,11 @@
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "lint": "tsc --noEmit -p . && echo typecheck ok",
-    "package": "npx @vscode/vsce package --no-dependencies",
+    "package": "vsce package --no-dependencies",
     "e2e": "node dist/e2e.js --root ../flask",
-    "mock-model": "node scripts/mock-model.mjs"
+    "mock-model": "node scripts/mock-model.mjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "vscode:prepublish": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -142,8 +265,31 @@
     "@types/diff": "^8.0.0",
     "@types/node": "^22.14.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "4.1.1",
     "esbuild": "^0.28.2",
+    "linkedom": "^0.18.15",
     "typescript": "^5.9.0",
     "vitest": "^5.1.0"
+  },
+  "files": [
+    "dist/extension.js",
+    "dist/webview/**",
+    "media/**",
+    "agent/anvil-agent.json",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "11.0.1"
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Anvil reads project files and can run approved shell commands. Trust the workspace to enable it."
+    },
+    "virtualWorkspaces": false
   }
 }

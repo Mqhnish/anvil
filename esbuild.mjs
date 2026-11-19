@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { cpSync, mkdirSync } from 'node:fs';
+import { cpSync, mkdirSync, watch as watchFiles } from 'node:fs';
 
 const watch = process.argv.includes('--watch');
 
@@ -41,7 +41,9 @@ cpSync('src/ui/webview', 'dist/webview', { recursive: true });
 if (watch) {
   const ctx = await esbuild.context(extensionOptions);
   const ctx2 = await esbuild.context(headlessOptions);
-  await Promise.all([ctx.watch(), ctx2.watch()]);
+  const ctx3 = await esbuild.context(e2eOptions);
+  watchFiles('src/ui/webview', { recursive: true }, () => cpSync('src/ui/webview', 'dist/webview', { recursive: true }));
+  await Promise.all([ctx.watch(), ctx2.watch(), ctx3.watch()]);
   console.log('watching…');
 } else {
   await esbuild.build(extensionOptions);

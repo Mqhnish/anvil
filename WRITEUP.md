@@ -1,123 +1,69 @@
-# Anvil — TrueFoundry Forge-a-thon, Round 1 write-up
+# Anvil - coding with context and review
 
-*(1–3 pages when exported. Fill the bracketed items after the demo recording. Export: open in VS Code → Markdown PDF, or `pandoc WRITEUP.md -o WRITEUP.pdf`.)*
+Round 1 review draft - live-model demonstration and recording still pending.
 
 ## 1. Team
 
-Team **Tokenisers**
-- Mohnish Singh Rawat — NTU — GitHub @Mqhnish (team leader)
-- Arnav Jain — NTU — GitHub @arnavjain29
-- Anay Sharma — NTU — GitHub @WgbCode7129
+Tokenisers, Nanyang Technological University: Mohnish Singh Rawat (@Mqhnish, team leader), Arnav Jain (@arnavjain29), and Anay Sharma (@WgbCode7129).
 
-Repository: https://github.com/Mqhnish/anvil · Demo video: [link]
+Repository: https://github.com/Mqhnish/anvil
+
+Demo video: not recorded. Replace this status with the public video link after recording.
 
 ## 2. Starting point
 
-**From scratch.** No upstream editor-agent fork. Runtime dependencies: `@truefoundry/trueforge-sdk` (TrueForge
-client), `@modelcontextprotocol/sdk` (to host our MCP server), `diff`, `ignore`, `zod`. The diff *viewer* is VS Code's
-own diff editor driven by a virtual document, CodeLens and decorations — we did not rebuild one.
+Built from scratch as a TypeScript VS Code extension, under the MIT license. Anvil uses the TrueForge SDK, MCP SDK, diff, ignore, and zod. It uses VS Code's native diff editor and undoable workspace edits. No upstream coding-agent extension was forked.
 
 ## 3. Architecture on TrueForge
 
-**VS Code is a client of a TrueForge agent.** On activation the extension (a) starts a Streamable-HTTP MCP server on
-`127.0.0.1:<port>` that exposes the editor, (b) registers it with TrueForge under *Settings → Connectors* as
-`vscode-workspace` (header auth with a per-launch secret), and (c) for every conversation creates a session with the
-inline agent spec from `agent/anvil-agent.json` (model name and server name filled from settings). Turns are sent
-with `sessions.createTurnStream`; events are rendered as they stream; pauses are answered with `subscribeToTurn` +
-`createTurnEvents`; `sessions.cancel` implements Cancel.
+VS Code is the editor client; TrueForge owns the agent loop. Anvil creates TrueForge sessions, streams turns, handles approval pauses, and requests cancellation. The extension does not call a model provider directly. Primary and fallback models are configured in TrueForge and selected by name in Anvil.
 
-**Editor capabilities as MCP tools** (`src/mcp/server.ts`): `read_file` (line ranges, numbered), `list_dir`,
-`search_workspace` (text/regex/glob), `find_symbols`, `assemble_context` (§4), `get_diagnostics`, `open_editors`,
-`git_status`, `propose_edit`, `run_command`. The agent — not the extension — chooses what to read and change.
+Anvil hosts a local MCP server with a per-launch secret. Its tools expose file reading, search, symbols, diagnostics, open editors, context assembly, edit proposals, approved commands, and git status. The model chooses which tools to use.
 
-**Tool approval drives the diff review.** `propose_edit` is annotated `readOnlyHint:false` (TrueForge's `@write`
-class) and `run_command` `destructiveHint:true`, so TrueForge pauses with `tool.approval_required` before either runs.
-On that pause Anvil opens the hunk review; the user's decisions are stored keyed by *(path, hash(before), hash(after))*;
-Anvil answers `allow` (or `deny` with the reason when every hunk was rejected). When TrueForge then executes the tool,
-the MCP handler looks the decision up and applies **only the accepted hunks**, then reports to the model exactly which
-hunks were rejected so it does not retry them. Writes happen per file after review, with a baseline check to avoid replacing intervening edits. Cancellation
-denies pending reviews and stops active commands; already accepted edits remain applied and can be undone.
-Retry and fallback stop after an accepted edit or command, so a failure cannot automatically replay side effects.
+Tool approval drives review. Before a proposed edit executes, Anvil opens a native diff and collects hunk decisions. The executing MCP handler applies only accepted hunks. Decisions are tied to the baseline and proposal; intervening file changes require a fresh review. Undo restores the previous content and removes newly created files when appropriate.
 
-**Harness features used and why.** *Deferred tool loading, selectively*: `preload_tools` eagerly loads the four tools
-used on nearly every turn (`assemble_context`, `read_file`, `search_workspace`, `propose_edit`); the other six are
-discovered on demand through TrueForge's meta tools, keeping the system prompt small. *Dynamic sub-agents* are on and
-the instructions tell the agent to delegate read-heavy, small-answer sub-tasks (e.g. "find every caller of X") so raw
-file contents stay out of the main context. *Compaction* is configured with an explicit 60k input-token trigger so
-long agent runs on a 17k-line repo keep working. Sandbox, web search and generative UI are off. File tools constrain paths to the workspace;
-user-approved shell commands run on the host and are not isolated by an OS sandbox. [Confirm what was visible in the recorded session and cite the timestamp.]
+Cancellation denies pending reviews, revokes approvals, and stops active shell processes on macOS/POSIX. Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request.
+
+Four frequent tools are preloaded; other tools are discovered on demand. The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. These features are configured, but their usefulness in the final real-model task has not yet been demonstrated.
 
 ## 4. How context is selected
 
-The intellectual core is `src/context/`. `RepoIndex` lists files (gitignore-aware, binary/size filtered), builds a
-regex outline per file (Python, TS/JS, Go, Rust, Java, Ruby, C, rst/md), chunks each file by top-level symbol, and
-keeps a BM25 index over identifier-split terms plus a path-term index and an import graph. It refreshes per file on
-save, so retrieval always sees the working tree.
+The local repository index respects ignore rules and excludes binary and oversized files. It extracts symbol outlines, splits code into symbol-sized chunks, indexes identifier terms with BM25, and records import relationships. Files are refreshed after saves and applied changes.
 
-`assemble_context(task, budget)` scores files by five signals and packs under a token budget:
-1. **Explicit mentions** — `@file`, `@symbol`, `@file:12-40`, and bare paths written in the task → always included
-   first, full file when it fits, else the mentioned symbol bodies, else an outline.
-2. **BM25 over symbol-level chunks** for the task's terms (identifiers split on camel/snake case, stemmed).
-3. **Rarity-weighted path and symbol-name agreement** — "command" matching `routes_command` in `cli.py` is decisive;
-   "flask" appearing in every path is worth nothing.
-4. **Open editors / active selection** — what the user is looking at.
-5. **Neighbour expansion** — for the top source files, their tests (`tests/test_<name>.py`, `<name>.test.ts`…), docs
-   (`docs/<name>.rst|md`) and the files they import, each with a lower weight and an explicit reason.
+Context ranking combines explicit @file/@symbol mentions, lexical relevance, path and symbol-name agreement, open editors, and related tests, documentation and imports. The default context budget is approximately 12,000 tokens. Packing chooses relevant symbol bodies or outlines instead of including every whole file. Token counts are estimates, not provider billing measurements.
 
-Packing: default budget 12 000 tokens (setting), per-file cap budget/4 (half that for tests/docs), retrieved files
-contribute only their best-matching symbol bodies, and every file carries a one-line *reason* ("tests for
-src/flask/cli.py", "symbol names match (command, config)"). The pack ends with the list of files that were considered
-but skipped and why. The agent is instructed to echo the chosen files and reasons before editing, and the panel renders
-the pack as a card with a budget bar — this is what is visible on screen in Task B. On pallets/flask 3.1.3 the Task B
-instruction selects `src/flask/cli.py`, `tests/test_cli.py`, `docs/cli.rst`, `src/flask/config.py` (and the CLI test
-runner) at 11.9k/12k tokens out of 128 candidates, in ~90 ms (unit test `test/retriever.test.ts`).
+Every selected file includes a reason. A visible context card shows selected files, reasons, estimated budget usage and skipped candidates. The agent is instructed to explain its intended files before a multi-file edit, and can search or read more when the initial pack is insufficient.
 
-Trade-off: lexical retrieval over symbol chunks, no embeddings — it is deterministic, runs in milliseconds on a laptop
-with no model calls, and is explainable per file, which the rubric rewards; it is weaker on purely semantic
-paraphrases, which the agent compensates for with `search_workspace`/`find_symbols` (and sub-agents) when the pack
-is insufficient.
+The trade-off is speed and explainability versus semantic recall. Retrieval uses no embeddings or additional model calls. Pure paraphrases can be weaker matches; search, symbol lookup and further reading provide recovery paths.
 
 ## 5. Model setup
 
-Models are configured only in TrueForge (*Settings → Models* or `trueforge/configure-models.mjs` with the git-ignored
-`models.local.json`; `models.example.json` ships placeholders). Anvil references FQNs; **Anvil: Select Model** lists
-whatever TrueForge has and writes `anvil.model.primary`; **Anvil: Select Fallback Model** sets the automatic fallback.
-Switching models is a setting change — no code touches a provider.
+All provider credentials stay in TrueForge or the git-ignored local configuration. The extension can select any supported configured model, plus a distinct fallback. The example configuration includes OpenAI, Gemini and a local OpenAI-compatible endpoint.
 
-Used for the demo: [primary model, provider, where it ran, approx cost]; fallback: [model]. Development and the
-headless e2e used our scripted mock model (`scripts/mock-model.mjs`, zero cost) and [any real model, cost].
-Task C was recorded with [invalid key on the primary / dead custom endpoint] and [fallback model].
+Verified runs used a local scripted mock model, with no paid model calls. A real primary/fallback pair has not been configured for the final demonstration. Record the exact model IDs, providers, execution location and measured or clearly estimated cost here after the live run. Do not describe scripted responses as model-generated task solutions.
 
 ## 6. Scorecard
 
-| Criterion | Timestamp | Claim |
+Evidence status below distinguishes implementation checks from the required recorded demonstration. Add video timestamps after recording; no competition score is claimed.
+
+| Criterion | Verified evidence | Still required |
 |---|---|---|
-| A1 Inline edit | [m:ss] | diff rendered in the editor with per-hunk Accept/Reject CodeLens |
-| A2 Agent mode | [m:ss] | Task B edits cli.py, test_cli.py, docs/cli.rst (+config.py) without any file named |
-| A3 Streaming & cancellation | [m:ss] | tokens stream into the panel; Esc cancels mid-generation; `git status` clean |
-| B1 Context assembly | [m:ss] | Context-pack card shows chosen files, reasons, 12k budget bar before edits |
-| B2 Diff safety | [m:ss] | hunk rejected in review; `Anvil: Undo Last Applied Change` restores file |
-| B3 Resilience | [m:ss] | primary fails → retry ×2 → automatic fallback notice → diff from fallback; variant without fallback shows one clear error, no files changed |
-| B4 TrueForge depth | [m:ss] | TrueForge session shows `assemble_context`/`propose_edit` tool calls and the approval pause; selective preload visible in the agent spec |
-| C1 Video | — | A → B → C, each verified on screen |
-| C2 Write-up | — | this document |
+| A1 Inline edit | Shortcut, native diff, accept/reject and undo exercised in VS Code | Exact Task A; individual hunk controls; timestamp |
+| A2 Agent mode | TrueForge/MCP tool loop exercised headlessly | Real-model Task B: discover and edit at least three files |
+| A3 Streaming and cancellation | Streaming and cancellation regression/e2e checks pass | Reliable interactive cancellation on video |
+| B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
+| B2 Diff safety | Baseline protection and undo tests; interactive accept/reject/undo | Individual accepted/rejected hunks on video |
+| B3 Resilience | Dead primary, retry, fallback, and no-fallback e2e cases pass | Repeat with a real fallback model |
+| B4 TrueForge depth | Agent spec, MCP registration and approval loop exercised | Show the TrueForge session and explain configured features |
+| C1 Video | Rehearsal script prepared | Record a legible video within the required limit |
+| C2 Write-up | Architecture, context strategy, verification and limitations documented | Fill live model details, video link and timestamps |
 
 ## 7. Tools used
 
-Claude Code (Opus) was used extensively to write and test the extension; TrueForge docs/OpenAPI and SDK types;
-VS Code Extension API docs; `pallets/flask` 3.1.3 as the fixed repository. [Add anything else.]
+TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extension APIs; Vitest and DOM regression tests; vsce packaging; pallets/flask as the task repository. Runtime dependencies and source licensing are documented in the repository.
 
-## 8. Known limitations and the next month
+## 8. Known limitations and next steps
 
-Automated verification on 19 November: 53 tests, typecheck, build, and all five TrueForge/mock-model
-end-to-end scenarios passed. See `docs/TESTLOG.md`. Interactive smoke checks cover the panel, inline shortcut, accept/reject and undo. Full real-model Tasks A/B/C
-remain unverified; video links and scorecard timestamps above must be filled from the recording.
+The automated suite and headless e2e verify extension behavior with scripted responses. Interactive smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, accept/reject and undo. Full real-model Tasks A/B/C, reliable UI cancellation, and individual per-hunk CodeLens actions remain to be demonstrated.
 
-- Retrieval is lexical; a hybrid with a small local embedding index over the same symbol chunks is the obvious next
-  step, keeping the per-file reasons.
-- Inline edit opens a diff editor rather than an in-place ghost-text overlay; a decoration-based inline preview
-  (same hunk model) is a UI week.
-- Hunk review is per file; a cross-file "change set" view with one Finish button would speed up Task-B-style runs.
-- `find_symbols` uses the regex outline even when a language server could answer more precisely in VS Code.
-- Sub-agent output is shown as collapsed cards; richer per-thread transcripts would help debugging.
-- [Add whatever the real-model runs revealed.]
+Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.

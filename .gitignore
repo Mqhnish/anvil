@@ -11,3 +11,7 @@ trueforge/models.local.json
 !.env.example
 /tmp/
 coverage/
+
+# Generated submission and rendering artifacts
+output/
+tmp/

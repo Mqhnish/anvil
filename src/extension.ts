@@ -50,7 +50,15 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   if (!folder) {
     status.text = '$(tools) Anvil: open a folder';
     status.show();
-    ctx.subscriptions.push(vscode.commands.registerCommand('anvil.openPanel', () => vscode.window.showInformationMessage('Anvil needs an open workspace folder.')));
+    ctx.subscriptions.push(
+      vscode.commands.registerCommand('anvil.openPanel', () => vscode.commands.executeCommand('anvil.agentPanel.focus')),
+      vscode.window.registerWebviewViewProvider('anvil.agentPanel', {
+        resolveWebviewView(view: vscode.WebviewView) {
+          view.webview.options = { enableCommandUris: ['vscode.openFolder'] };
+          view.webview.html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:20px;line-height:1.6}h1{font-size:22px}p{color:var(--vscode-descriptionForeground)}a{color:var(--vscode-textLink-foreground)}</style></head><body><h1>Open your workspace</h1><p>Anvil uses the files in your project to understand and propose changes.</p><a href="command:vscode.openFolder">Open a folder →</a></body></html>`;
+        },
+      }),
+    );
     return;
   }
 
@@ -198,6 +206,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('anvil.openPanel', () => panel.reveal()),
+    vscode.commands.registerCommand('anvil.openSettings', () => vscode.commands.executeCommand('workbench.action.openSettings', 'anvil')),
     vscode.commands.registerCommand('anvil.cancel', () => cancelTurn()),
     vscode.commands.registerCommand('anvil.inlineEdit', async () => {
       if (!(await preflight())) return;
@@ -243,10 +252,15 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   async function pickModel(key: 'model.primary' | 'model.fallback', title: string): Promise<void> {
     const p = await ping(conn);
-    if (!p.ok) { vscode.window.showErrorMessage(p.message); return; }
+    if (!p.ok) {
+      const action = await vscode.window.showErrorMessage(p.message, 'Start TrueForge', 'Open settings');
+      if (action === 'Start TrueForge') await vscode.commands.executeCommand('anvil.startTrueForge');
+      if (action === 'Open settings') await vscode.commands.executeCommand('anvil.openSettings');
+      return;
+    }
     let models: { name: string; provider: string; warning?: string }[] = [];
     try { models = await listModels(conn); } catch (e) { vscode.window.showErrorMessage(`Anvil: could not list models: ${describeError(e)}`); return; }
-    if (!models.length) {
+    if (!models.length && key !== 'model.fallback') {
       const pick = await vscode.window.showWarningMessage('TrueForge has no models configured. Add a provider under Settings → Models (any OpenAI-compatible endpoint works), then retry.', 'Open TrueForge');
       if (pick) void vscode.env.openExternal(vscode.Uri.parse(conn.baseUrl + '/settings'));
       return;
@@ -264,7 +278,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   // --- startup ---------------------------------------------------------------------------------------------------
   updateStatus();
   try { await mcp.start(); } catch (e) { vscode.window.showErrorMessage(`Anvil: could not start the workspace MCP server: ${describeError(e)}`); }
-  void index.ensure().then(() => host.log('[index] ready'));
+  void index.ensure().then(() => host.log('[index] ready')).catch(e => { host.log(`[index] ${describeError(e)}`); panel.post({ type: 'notice', level: 'error', text: 'Could not index the workspace. Open the Anvil output log for details.' }); });
   void ping(conn).then(async p => {
     svc.trueforgeState = p.ok ? 'ok' : 'unreachable';
     if (p.ok) { try { await registerWorkspaceMcp(conn, cfg('mcp.serverName', 'vscode-workspace'), mcp.url, mcp.secret); svc.registered = true; } catch (e) { host.log(`[tf] registration at startup failed: ${describeError(e)}`); } }

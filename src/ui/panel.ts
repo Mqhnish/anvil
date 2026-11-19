@@ -3,6 +3,8 @@
  * Streams tokens, shows tool calls, context packs, approval cards, questions and the TrueForge session link.
  */
 import * as vscode from 'vscode';
+import { randomBytes } from 'node:crypto';
+import { resolveWorkspacePath } from '../host/paths';
 import type { ContextPack } from '../context/retriever';
 import type { RepoIndex } from '../context/index';
 import { mentionCandidates } from '../context/mentions';
@@ -41,17 +43,18 @@ export class AgentPanel implements vscode.WebviewViewProvider {
   private readonly pendingApprovals = new Map<string, (r: { allow: boolean; reason?: string }) => void>();
   private readonly pendingQuestions = new Map<string, (answer: string) => void>();
   private seq = 0;
+  private ready = false;
 
   constructor(private readonly ctx: vscode.ExtensionContext, private readonly delegate: PanelDelegate) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    this.ready = false;
     view.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview')] };
-    view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage(async (m: { type: string; [k: string]: unknown }) => {
       switch (m.type) {
-        case 'ready': for (const q of this.queue.splice(0)) view.webview.postMessage(q); this.post({ type: 'status', payload: this.delegate.status() }); break;
-        case 'send': await this.delegate.send(String(m.text ?? '')); break;
+        case 'ready': this.ready = true; for (const q of this.queue.splice(0)) view.webview.postMessage(q); this.post({ type: 'status', payload: this.delegate.status() }); break;
+        case 'send': try { await this.delegate.send(String(m.text ?? '')); } finally { this.status(); } break;
         case 'cancel': await this.delegate.cancel(); break;
         case 'newChat': if (!this.delegate.newChat()) break; this.post({ type: 'reset' }); this.post({ type: 'status', payload: this.delegate.status() }); break;
         case 'openSession': this.delegate.openSession(); break;
@@ -59,11 +62,12 @@ export class AgentPanel implements vscode.WebviewViewProvider {
         case 'openFile': {
           const folder = vscode.workspace.workspaceFolders?.[0];
           if (folder) {
-            const uri = vscode.Uri.joinPath(folder.uri, String(m.path));
+            let uri: vscode.Uri;
+            try { uri = vscode.Uri.file(resolveWorkspacePath(folder.uri.fsPath, String(m.path))); } catch { break; }
             const doc = await vscode.workspace.openTextDocument(uri).then(d => d, () => undefined);
             if (doc) {
               const editor = await vscode.window.showTextDocument(doc, { preview: true });
-              if (typeof m.line === 'number') { const pos = new vscode.Position(Math.max(0, (m.line as number) - 1), 0); editor.selection = new vscode.Selection(pos, pos); editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter); }
+              if (typeof m.line === 'number') { const pos = new vscode.Position(Math.min(doc.lineCount - 1, Math.max(0, Math.floor(m.line) - 1)), 0); editor.selection = new vscode.Selection(pos, pos); editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter); }
             }
           }
           break;
@@ -71,10 +75,11 @@ export class AgentPanel implements vscode.WebviewViewProvider {
         case 'approve': { const r = this.pendingApprovals.get(String(m.id)); if (r) { this.pendingApprovals.delete(String(m.id)); r({ allow: !!m.allow, reason: m.allow ? undefined : 'declined in panel' }); this.post({ type: 'approval.resolved', id: String(m.id), allow: !!m.allow }); } break; }
         case 'answer': { const r = this.pendingQuestions.get(String(m.id)); if (r) { this.pendingQuestions.delete(String(m.id)); r(String(m.answer ?? '')); } break; }
         case 'mention.query': { const idx = this.delegate.index(); this.post({ type: 'mention.results', q: String(m.q), items: idx ? mentionCandidates(idx, String(m.q)) : [] }); break; }
-        case 'command': await vscode.commands.executeCommand(String(m.command)); break;
+        case 'command': if (['anvil.startTrueForge', 'anvil.selectModel', 'anvil.selectFallbackModel', 'anvil.openSettings'].includes(String(m.command))) await vscode.commands.executeCommand(String(m.command)); break;
       }
     });
-    view.onDidDispose(() => { this.flushPending(); this.view = undefined; });
+    view.webview.html = this.html(view.webview);
+    view.onDidDispose(() => { this.flushPending(); this.view = undefined; this.ready = false; });
   }
 
   reveal(): void {
@@ -83,7 +88,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
   }
 
   post(m: ToWebview): void {
-    if (this.view) void this.view.webview.postMessage(m);
+    if (this.view && this.ready) void this.view.webview.postMessage(m);
     else { this.queue.push(m); if (this.queue.length > 500) this.queue.shift(); }
   }
 
@@ -114,7 +119,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
     const base = vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview');
     const script = webview.asWebviewUri(vscode.Uri.joinPath(base, 'main.js'));
     const style = webview.asWebviewUri(vscode.Uri.joinPath(base, 'style.css'));
-    const nonce = Math.random().toString(36).slice(2);
+    const nonce = randomBytes(16).toString('hex');
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
@@ -122,13 +127,27 @@ export class AgentPanel implements vscode.WebviewViewProvider {
 <link rel="stylesheet" href="${style}"><title>Anvil</title></head>
 <body>
 <div id="app">
-  <header id="status"><span id="modelChip" class="chip" title="Click to change model">model: —</span><span id="tfChip" class="chip">TrueForge: —</span><span id="sessionChip" class="chip hidden" title="Open this session in the TrueForge UI">session</span><button id="newChat" class="icon" title="New chat">＋</button></header>
-  <main id="log"></main>
-  <div id="mentions" class="hidden"></div>
+  <header id="status">
+    <div class="brand"><strong>Anvil</strong><span>Workspace agent</span><button id="newChat" class="icon" aria-label="New chat" title="New chat">＋</button></div>
+    <div class="connection"><button id="modelChip" class="chip" title="Select a model">Choose model</button><span id="tfChip" class="chip">Connecting…</span><button id="sessionChip" class="chip hidden" title="Open this session in TrueForge">Session ↗</button></div>
+  </header>
+  <main id="log" aria-label="Conversation">
+    <section id="welcome" class="welcome">
+      <div class="eyebrow">YOUR WORKSPACE, IN CONTEXT</div>
+      <h1>What would you like to change?</h1>
+      <p>Describe a task. Anvil finds relevant code and proposes changes for your review.</p>
+      <div id="setup" class="setup hidden" role="status"><strong id="setupTitle"></strong><p id="setupText"></p><button id="setupAction" class="primary"></button></div>
+      <div class="examples"><button class="example" data-prompt="Explain how this project is organized and where its main entry points are.">Explore this project <span>Find the main entry points</span></button><button class="example" data-prompt="Find a small bug, propose a focused fix, and suggest how to verify it.">Investigate a bug <span>Review a focused fix</span></button></div>
+      <div class="welcome-note">Select code in the editor to request an inline edit.<br>Use @file or @symbol to pin context.</div>
+    </section>
+  </main>
+  <div id="mentions" class="hidden" role="listbox" aria-label="Context suggestions"></div>
   <footer>
-    <div id="statusLine"></div>
-    <textarea id="input" rows="3" placeholder="Describe a change… use @file or @symbol to pin context. Enter to send, Shift+Enter for newline."></textarea>
-    <div class="row"><button id="send" class="primary">Send</button><button id="cancel" class="danger hidden">Cancel (Esc)</button><span class="hint">Edits are reviewed hunk by hunk before anything touches disk.</span></div>
+    <div id="statusLine" role="status" aria-live="polite">Ready when you are</div>
+    <label class="sr-only" for="input">Describe a change</label>
+    <textarea id="input" rows="3" placeholder="Describe a change… @file or @symbol" aria-describedby="inputHint"></textarea>
+    <div class="row"><span id="inputHint" class="hint">Enter to send · Shift+Enter for a new line</span><button id="send" class="primary">Send</button><button id="cancel" class="danger hidden">Cancel</button></div>
+    <p class="safety-note">Review before applying · Accepted edits can be undone</p>
   </footer>
 </div>
 <script nonce="${nonce}" src="${script}"></script>
