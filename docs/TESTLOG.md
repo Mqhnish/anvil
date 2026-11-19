@@ -180,7 +180,7 @@ Verified:
 
 Real VS Code window (Extension Development Host) on a fresh local clone of Flask 3.1.3 per take, Gemini 3.5
 Flash-Lite (free tier) through local TrueForge. A scripted driver (`tmp/film/driver.cjs`, not shipped) typed the
-instructions and pressed Accept/Reject; frames were captured over CDP and assembled into a 3:04 video.
+instructions and pressed Accept/Reject; frames were captured over CDP and assembled into a 2:31 video (1.25× playback, ~100 ms crossfades between captured frames; capture ran at ~6.6 fps).
 
 - Task A: one diff, accepted. FLASK_DEBUG=off → False, N → False, 1 → True; docstring lists the empty string.
 - Task B (session `01m7ssn1…`): no file names in the instruction. Five diffs reviewed and accepted across
