@@ -17,6 +17,8 @@
   const setupTitle = document.getElementById('setupTitle');
   const setupText = document.getElementById('setupText');
   const setupAction = document.getElementById('setupAction');
+  const hint = document.getElementById('inputHint');
+  const HINT_IDLE = hint.textContent;
   let setupCommand = 'anvil.startTrueForge';
   setupAction.addEventListener('click', () => vscode.postMessage({ type: 'command', command: setupCommand }));
   document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.prompt; input.focus(); }));
@@ -37,6 +39,7 @@
   // Tool steps read as actions ("Read src/flask/cli.py L1–120"); the raw tool name stays in the tooltip.
   const TOOL_VERBS = { read_file: 'Read', list_dir: 'List', search_workspace: 'Search', find_symbols: 'Find symbols', assemble_context: 'Assemble context', get_diagnostics: 'Diagnostics', open_editors: 'Open editors', propose_edit: 'Propose edit', run_command: 'Run', git_status: 'Git status' };
   const SPARK = '<svg viewBox="104 4 40 22" aria-hidden="true"><path d="m112 17-2-9m11 7 5-9m2 16 9-5" stroke="currentColor" stroke-width="3" stroke-linecap="square" fill="none"/></svg>';
+  const EFFECT_TOOLS = new Set(['propose_edit', 'run_command']);
   function toolVerb(name) { return TOOL_VERBS[name] || name; }
   function toolTarget(name, a) {
     if (!a || typeof a !== 'object') return '';
@@ -80,9 +83,10 @@
     return c;
   }
 
+  function endStream() { if (currentAssistant) currentAssistant.classList.remove('streaming'); }
   function ensureAssistant() {
     if (!currentAssistant) {
-      currentAssistant = el('div', 'msg assistant');
+      currentAssistant = el('div', 'msg assistant streaming');
       currentAssistant.dataset.raw = '';
       log.appendChild(currentAssistant);
     }
@@ -92,11 +96,14 @@
   function setRunning(r, text) {
     running = r;
     sendBtn.disabled = r;
+    // While a turn runs, Cancel takes Send's place so the one available action is the one on screen.
+    sendBtn.classList.toggle('hidden', r);
+    hint.textContent = r ? 'Esc to cancel' : HINT_IDLE;
     document.getElementById('newChat').disabled = r;
     cancelBtn.classList.toggle('hidden', !r);
     statusLine.classList.toggle('running', r);
     if (text !== undefined) statusLine.textContent = text;
-    if (!r) { currentAssistant = null; threadEls.clear(); }
+    if (!r) { endStream(); currentAssistant = null; threadEls.clear(); }
   }
 
   function send() {
@@ -206,12 +213,13 @@
         break;
       }
       case 'tool.call': {
-        currentAssistant = null; // next deltas start a new assistant bubble
+        endStream(); currentAssistant = null; // next deltas start a new assistant bubble
         let args = m.args, parsed;
         try { parsed = JSON.parse(m.args); args = Object.entries(parsed).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v.slice(0, 400) : JSON.stringify(v).slice(0, 400))).join('\n'); } catch { }
         const target = toolTarget(m.name, parsed);
         const title = '<span class="verb">' + esc(toolVerb(m.name)) + '</span>' + (target ? '<span class="target">' + esc(target) + '</span>' : '') + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : '');
-        const c = card('tool running', title, args, true);
+        // Steps that change the workspace get a square marker, so they stand out without relying on colour.
+        const c = card('tool running' + (EFFECT_TOOLS.has(m.name) ? ' effect' : ''), title, args, true);
         c.querySelector('.title').title = m.name;
         toolCards.set(m.id, c);
         lastToolCardByName.set(m.name, c);
@@ -222,6 +230,7 @@
         const c = (m.id && toolCards.get(m.id)) || lastToolCardByName.get(m.name);
         if (c) {
           c.classList.remove('running');
+          c.classList.add('settled'); c.addEventListener('animationend', () => c.classList.remove('settled'), { once: true });
           const b = c.querySelector('.body');
           b.textContent = (b.textContent ? b.textContent + '\n\n' : '') + '→ ' + m.text.slice(0, 4000) + (m.text.length > 4000 ? '\n… (' + m.text.length + ' chars)' : '');
           const t = c.querySelector('.title');
@@ -237,15 +246,22 @@
         const c = card('context', 'Context: ' + p.chosen.length + ' file' + (p.chosen.length === 1 ? '' : 's') + ' <span class="badge">' + n(p.usedTokens) + ' of ' + n(p.budgetTokens) + ' tokens</span>', undefined, false);
         const b = c.querySelector('.body');
         b.textContent = '';
+        const left = Math.max(0, p.budgetTokens - p.usedTokens);
         b.appendChild(el('div', 'meta', 'Ranked from ' + n(p.candidatesConsidered) + ' candidates in ' + p.tookMs + ' ms'));
-        // One segment per chosen file, hottest (highest ranked) first, so the bar shows where the budget went.
-        const bar = el('div', 'heat'); bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', n(p.usedTokens) + ' of ' + n(p.budgetTokens) + ' tokens used');
-        const heat = i => Math.max(0.28, 1 - i * 0.14);
-        p.chosen.forEach((f, i) => { const seg = el('span'); seg.style.flexGrow = String(f.tokens); seg.style.opacity = String(heat(i)); seg.title = f.path + ': ' + n(f.tokens) + ' tokens'; bar.appendChild(seg); });
-        const free = el('span', 'free'); free.style.flexGrow = String(Math.max(0, p.budgetTokens - p.usedTokens)); bar.appendChild(free);
+        // Budget meter: one segment per chosen file in rank order, width = its tokens; the hatched tail is unused budget.
+        // Segment i and row i share data-i, so hovering either one highlights both.
+        const bar = el('div', 'heat'); bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', n(p.usedTokens) + ' of ' + n(p.budgetTokens) + ' tokens used across ' + p.chosen.length + ' files');
+        const link = (node, i) => {
+          node.dataset.i = String(i);
+          node.addEventListener('mouseenter', () => b.querySelectorAll('[data-i="' + i + '"]').forEach(x => x.classList.add('hot')));
+          node.addEventListener('mouseleave', () => b.querySelectorAll('[data-i="' + i + '"]').forEach(x => x.classList.remove('hot')));
+        };
+        p.chosen.forEach((f, i) => { const seg = el('span'); seg.style.flexGrow = String(f.tokens); seg.style.setProperty('--i', String(i)); seg.title = (i + 1) + '. ' + f.path + ': ' + n(f.tokens) + ' tokens'; link(seg, i); bar.appendChild(seg); });
+        const free = el('span', 'free'); free.style.flexGrow = String(left); free.title = n(left) + ' tokens left in the budget'; bar.appendChild(free);
         b.appendChild(bar);
         p.chosen.forEach((f, i) => {
-          const row = el('div', 'ctx-file'); row.style.setProperty('--heat', String(heat(i)));
+          const row = el('div', 'ctx-file'); link(row, i); row.style.setProperty('--i', String(i));
+          row.appendChild(el('span', 'rank', String(i + 1)));
           const a = el('a', 'file', f.path); a.dataset.path = f.path; a.dataset.line = f.ranges && f.ranges[0] ? f.ranges[0].startLine : '';
           row.appendChild(a);
           row.appendChild(el('span', 'tok', n(f.tokens)));

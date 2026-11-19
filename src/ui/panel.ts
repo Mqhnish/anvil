@@ -128,25 +128,12 @@ export class AgentPanel implements vscode.WebviewViewProvider {
 <body>
 <div id="app">
   <header id="status">
-    <div class="brand"><svg class="mark" viewBox="36 4 158 106" aria-hidden="true" focusable="false"><g stroke="var(--forge-ink)" stroke-linejoin="round" stroke-width="3"><path fill="var(--forge-mid)" d="m41 46 48 6 22-10 57 0-5 11-26 11-7 13 25 6-39 16-47-13 18-8 4-12-6-7-23-2z"/><path fill="var(--forge-face)" d="m41 46 45-21 35 1 16-7 53 4-22 19-57 0-22 10z"/></g><g stroke="var(--forge-accent)" stroke-width="5" stroke-linecap="square"><path d="m112 17-2-9m11 7 5-9m2 16 9-5"/></g></svg><strong>Anvil</strong><span>Workspace agent</span><button id="newChat" class="icon" aria-label="New chat" title="New chat">＋</button></div>
+    <div class="brand"><svg class="mark" viewBox="36 4 158 106" aria-hidden="true" focusable="false"><g stroke="var(--forge-ink)" stroke-linejoin="round" stroke-width="3"><path fill="var(--forge-mid)" d="m41 46 48 6 22-10 57 0-5 11-26 11-7 13 25 6-39 16-47-13 18-8 4-12-6-7-23-2z"/><path fill="var(--forge-face)" d="m41 46 45-21 35 1 16-7 53 4-22 19-57 0-22 10z"/></g><g stroke="var(--forge-accent)" stroke-width="5" stroke-linecap="square"><path d="m112 17-2-9m11 7 5-9m2 16 9-5"/></g></svg><strong>Anvil</strong><button id="newChat" class="icon" aria-label="New chat" title="New chat">＋</button></div>
     <div class="connection"><button id="modelChip" class="chip" title="Select a model">Choose model</button><span id="tfChip" class="chip">Connecting…</span><button id="sessionChip" class="chip hidden" title="Open this session in TrueForge">Session ↗</button></div>
   </header>
   <main id="log" aria-label="Conversation">
     <section id="welcome" class="welcome">
-      <div class="forge-print" aria-hidden="true">
-        <svg viewBox="0 0 240 116" fill="none" focusable="false">
-          <g stroke="currentColor" stroke-width="1" opacity=".35"><path d="M8 19h12m-6-6v12m204 72h12m-6-6v12M25 93l73-42m46 45 61-35" /></g>
-          <g stroke="var(--forge-ink)" stroke-linejoin="round" stroke-width="1.6">
-            <path fill="var(--forge-shade)" d="m41 46 45-21 35 1 16-7 53 4-22 19-5 11-16 8-7 14 15 8-1 7-38 15-47-12v-7l18-8 4-12-6-7-23-2z"/>
-            <path fill="var(--forge-mid)" d="m41 46 48 6 22-10 57 0-5 11-26 11-7 13 25 6-39 16-47-13 18-8 4-12-6-7-23-2z"/>
-            <path fill="var(--forge-face)" d="m41 46 45-21 35 1 16-7 53 4-22 19-57 0-22 10z"/>
-            <path stroke="var(--forge-accent)" d="m45 46 44 5 22-10 56 0"/>
-            <path d="m116 99 0 6m21-41 10-3m-47-15 9-9m-5 7 7-7"/>
-          </g>
-          <g stroke="var(--forge-accent)" stroke-width="2" stroke-linecap="square"><path d="m112 17-2-9m11 7 5-9m2 16 9-5"/></g>
-        </svg>
-      </div>
-      <h1>Work on this repo.</h1>
+      <h1>Work on this repo</h1>
       <p>Describe a change, or start with a task below.</p>
       <div id="setup" class="setup hidden" role="status"><strong id="setupTitle"></strong><p id="setupText"></p><button id="setupAction" class="primary"></button></div>
       <div class="examples"><button class="example" data-prompt="Explain how this project is organized and where its main entry points are.">Explore the codebase <span>Trace the main entry points</span></button><button class="example" data-prompt="Find a small bug, propose a focused fix, and suggest how to verify it.">Investigate a bug <span>Find a fix and how to test it</span></button></div>
@@ -159,7 +146,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
     <div class="composer">
     <label class="sr-only" for="input">Describe a change</label>
     <textarea id="input" rows="3" placeholder="Describe a change… Use @ to add context" aria-describedby="inputHint"></textarea>
-    <div class="row"><span id="inputHint" class="hint">Enter to send · Shift+Enter for a new line</span><button id="send" class="primary">Send</button><button id="cancel" class="danger hidden">Cancel</button></div>
+    <div class="row"><span id="inputHint" class="hint">Enter to send</span><button id="send" class="primary">Send</button><button id="cancel" class="danger hidden">Cancel</button></div>
     </div>
   </footer>
 </div>

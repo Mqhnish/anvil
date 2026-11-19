@@ -29,7 +29,7 @@ main#log { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-directio
 .row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
 button { font-family: inherit; font-size: 12px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--vscode-button-border, transparent); cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
 button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-button.danger { background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-foreground); }
+button.danger { background: transparent; color: var(--vscode-errorForeground); border-color: currentColor; font-weight: 600; }
 button:disabled { opacity: 0.5; cursor: default; }
 footer { border-top: 1px solid var(--vscode-panel-border); padding: 6px 8px; }
 #statusLine { font-size: 11px; opacity: 0.8; min-height: 14px; margin-bottom: 4px; }
@@ -55,10 +55,9 @@ textarea#input { width: 100%; resize: vertical; background: var(--vscode-input-b
 .vscode-light #app, .vscode-high-contrast-light #app { --forge-accent: #954318; }
 header#status { display: block; padding: 14px 16px 10px; }
 .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-.brand strong { font-size: 19px; font-weight: 850; font-style: italic; letter-spacing: -1px; text-transform: uppercase; }
-.brand > span { color: var(--vscode-descriptionForeground); font: 10px var(--forge-mono); }
+.brand strong { font-size: 14px; font-weight: 600; }
 .connection { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.chip { max-width: 100%; font: 10px var(--forge-mono); padding: 3px 5px; border: 1px solid var(--forge-line); border-radius: 3px; background: transparent; color: var(--vscode-foreground); }
+.chip { max-width: 100%; font: 11px var(--forge-mono); padding: 3px 5px; border: 1px solid var(--forge-line); border-radius: 3px; background: transparent; color: var(--vscode-foreground); }
 #tfChip { border: 0; background: transparent; color: var(--vscode-descriptionForeground); cursor: default; }
 #tfChip::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; background: currentColor; }
 #tfChip.ok::before { background: var(--vscode-testing-iconPassed); }
@@ -67,21 +66,12 @@ main#log { padding: 14px 16px; min-height: 0; gap: 12px; }
 /* Cards keep their height and the log scrolls; without this, flex shrinks overflowing cards to thin lines. */
 main#log > * { flex-shrink: 0; }
 .welcome { padding: 2px 0; }
-.forge-print {
-  display: grid; place-items: center; height: clamp(72px, 18vh, 134px); overflow: hidden;
-  border: 1px solid var(--forge-line); color: var(--forge-accent);
-  background-color: color-mix(in srgb, var(--forge-accent) 5%, var(--vscode-editor-background));
-  background-image: radial-gradient(color-mix(in srgb, currentColor 28%, transparent) .85px, transparent 1px);
-  background-size: 12px 12px;
-}
-.forge-print svg { height: 100%; max-width: 100%; }
-.welcome h1 { font-size: clamp(23px, 7vw, 32px); letter-spacing: -.045em; line-height: 1.1; margin: 16px 0 6px; }
+.welcome h1 { font-size: 16px; font-weight: 600; line-height: 1.3; margin: 4px 0 4px; }
 .welcome p { color: var(--vscode-descriptionForeground); line-height: 1.5; margin: 0 0 14px; font-size: 12px; }
 .setup { border: 1px solid var(--forge-line); padding: 12px; margin: 14px 0; }
 .setup p { margin: 6px 0 12px; }
 .examples { border-top: 1px solid var(--forge-line); }
-.example { display: block; width: 100%; position: relative; text-align: left; padding: 10px 28px 10px 2px; border: 0; border-bottom: 1px solid var(--forge-line); border-radius: 0; background: transparent; color: var(--vscode-foreground); font-weight: 600; }
-.example::after { content: '↗'; position: absolute; right: 4px; top: 12px; color: var(--forge-accent); }
+.example { display: block; width: 100%; position: relative; text-align: left; padding: 10px 8px 10px 2px; border: 0; border-bottom: 1px solid var(--forge-line); border-radius: 0; background: transparent; color: var(--vscode-foreground); font-weight: 600; }
 .example span { display: block; font-size: 11px; margin-top: 3px; font-weight: 400; color: var(--vscode-descriptionForeground); }
 .example:hover { background: var(--vscode-list-hoverBackground); }
 .welcome-note { margin-top: 12px; font-size: 11px; color: var(--vscode-descriptionForeground); }
@@ -95,18 +85,18 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visib
 .card > .row { padding: 0 10px 10px; flex-wrap: wrap; }
 .card > .why { padding: 0 10px 10px; }
 .card.notice.error > button.title { color: var(--vscode-errorForeground); }
-.ctx-file { grid-template-columns: minmax(0, 1fr) auto; gap: 4px; padding: 8px 0; }
+.ctx-file { grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 4px; padding: 8px 0; }
 .ctx-file a { overflow-wrap: anywhere; }
-.ctx-file .why { grid-column: 1 / -1; grid-row: 2; font-family: var(--vscode-font-family); line-height: 1.5; }
+.ctx-file .why { grid-column: 2 / -1; grid-row: 2; font-family: var(--vscode-font-family); line-height: 1.5; }
 .bar { opacity: 1; background: var(--vscode-editor-background); height: 4px; margin: 0 0 8px; }
 footer { padding: 10px 12px; }
 textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding: 10px; resize: vertical; }
-#statusLine { color: var(--vscode-descriptionForeground); font-size: 10px; margin-bottom: 8px; overflow-wrap: anywhere; }
-.hint { margin-right: auto; margin-left: 0; font-size: 9px; opacity: 1; color: var(--vscode-descriptionForeground); }
-.safety-note { font-size: 9px; color: var(--vscode-descriptionForeground); margin: 8px 0 0; line-height: 1.4; }
+#statusLine { color: var(--vscode-descriptionForeground); font-size: 11px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.hint { margin-right: auto; margin-left: 0; font-size: 11px; opacity: 1; color: var(--vscode-descriptionForeground); }
+.safety-note { font-size: 11px; color: var(--vscode-descriptionForeground); margin: 8px 0 0; line-height: 1.4; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 #mentions { bottom: 155px; }
-@media (max-width: 250px) { .brand > span { display: none; } .hint { flex-basis: 100%; } .row { flex-wrap: wrap; } }
+@media (max-width: 250px) { .hint { flex-basis: 100%; } .row { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
 
 .composer { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--forge-line)); border-radius: 6px; padding: 3px; }
@@ -116,7 +106,6 @@ textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding:
 #send { background: var(--forge-accent); color: #22170f; font-weight: 650; }
 .vscode-light #send, .vscode-high-contrast-light #send { color: white; }
 .card.review:not(.tool) { border-left-color: var(--forge-accent); background: color-mix(in srgb, var(--forge-accent) 6%, var(--vscode-editorWidget-background)); }
-@media (max-height: 460px) { .forge-print { display: none; } .welcome h1 { margin-top: 0; } }
 
 /* Activity log. Tool calls are steps on a thin rail, not boxes: an agent run can make dozens of them, and only
    the cards that need the user (review, approval, question, errors) get a border and the accent colour. */
@@ -139,7 +128,7 @@ textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding:
 .card.tool.running > button.title::before { background: var(--forge-accent); animation: pulse 1.2s ease-in-out infinite; }
 .card.notice.warn > button.title::before { background: var(--vscode-charts-orange); }
 .card.tool .verb { font-weight: 600; white-space: nowrap; }
-.target { font-family: var(--forge-mono); font-size: 10.5px; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.target { font-family: var(--forge-mono); font-size: 11px; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .card.review:not(.tool) > button.title .target { color: inherit; font-size: inherit; font-weight: 600; }
 .card .title .badge { flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--vscode-descriptionForeground); opacity: 1; }
 .card.tool > .body, .card.thread > .body { margin: 2px 0 6px 16px; padding: 8px 10px; border-left: 1px solid var(--rail); background: var(--vscode-textCodeBlock-background); border-radius: 0 3px 3px 0; }
@@ -155,12 +144,13 @@ textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding:
 .resolved.no::before { content: '✕ '; color: var(--vscode-errorForeground); }
 
 /* Context pack */
-.card.context > .body { max-height: 340px; }
+/* No inner scroll: the log already scrolls, and the "Left out" line must stay visible. */
+.card.context > .body { max-height: none; }
 .card.context .meta { font-family: var(--vscode-font-family); font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
 .card.context .bar > span { background: var(--forge-accent); }
-.ctx-file .tok { color: var(--vscode-descriptionForeground); opacity: 1; font-size: 10px; }
+.ctx-file .tok { color: var(--vscode-descriptionForeground); opacity: 1; font-size: 11px; }
 .ctx-file .why { color: var(--vscode-descriptionForeground); opacity: 1; }
-.ctx-file .ranges { display: block; font-family: var(--forge-mono); font-size: 10px; margin-top: 1px; }
+.ctx-file .ranges { display: block; font-family: var(--forge-mono); font-size: 11px; margin-top: 1px; }
 .card.context .skipped { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--vscode-panel-border); font-family: var(--vscode-font-family); font-size: 11px; color: var(--vscode-descriptionForeground); }
 
 /* End of a turn: a quiet divider with the outcome first. */
@@ -192,33 +182,111 @@ button:not(.title):not(.example) { transition: transform 120ms var(--ease-out), 
 .brand .mark { width: 30px; height: 20px; flex-shrink: 0; margin-right: -2px; }
 .brand strong { color: var(--vscode-foreground); }
 
-/* Steps are struck hot and cool down: the running step glows like an ember, then fades to grey when its result
-   arrives. The slower 450ms cool-down is the state change itself, so it never delays anything. */
-.card.tool > button.title::before { transition: background-color 450ms var(--ease-out), box-shadow 450ms var(--ease-out); }
-.card.tool.running > button.title::before {
-  background: var(--forge-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--forge-accent) 22%, transparent), 0 0 10px 1px color-mix(in srgb, var(--forge-accent) 55%, transparent);
-}
+/* The running step pulses in the accent, then fades to grey when its result arrives. */
+.card.tool > button.title::before { transition: background-color 450ms var(--ease-out); }
 .card.tool.running .verb { color: var(--forge-accent); }
 .card.tool .verb { transition: color 450ms var(--ease-out); }
 
-/* Cards that wait on you carry the dotted forge-plate texture from the welcome art. */
+/* Cards that wait on you: a faint accent tint and the accent left edge. */
 .card.review:not(.tool), .card.approval, .card.question {
   background-color: color-mix(in srgb, var(--forge-accent) 5%, var(--vscode-editorWidget-background));
-  background-image: radial-gradient(color-mix(in srgb, var(--forge-accent) 16%, transparent) .8px, transparent 1px);
-  background-size: 10px 10px; background-position: -3px -3px;
 }
 .card.review:not(.tool) > button.title, .card.approval > button.title, .card.question > button.title { font-size: 12px; }
 
-/* Context heat bar: one segment per file, hottest first; the empty tail is unused budget. */
+/* Context budget meter: one segment per file in rank order, width = its tokens, 2px gaps; the hatched tail is unused budget.
+   Rank is shown by position and the row number, not by fading the colour, so every segment keeps full contrast. */
 .heat { display: flex; gap: 2px; height: 8px; margin: 0 0 10px; }
-.heat > span { min-width: 3px; background: var(--forge-accent); border-radius: 1px; }
+.heat > span { min-width: 3px; background: var(--forge-accent); border-radius: 1px; transition: opacity 120ms var(--ease-out); }
+.heat:has(> .hot) > span:not(.hot):not(.free) { opacity: .35; }
 .heat > span.free { opacity: 1 !important; background: repeating-linear-gradient(135deg, var(--vscode-panel-border) 0 2px, transparent 2px 5px); }
 .ctx-file { position: relative; padding-left: 10px; }
-.ctx-file::before { content: ''; position: absolute; left: 0; top: 11px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--forge-accent); opacity: var(--heat, 1); }
+.ctx-file::before { content: ''; position: absolute; left: 0; top: 11px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--rail); }
+.ctx-file.hot::before { background: var(--forge-accent); }
+.ctx-file .rank { font: 11px var(--forge-mono); color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
+.ctx-file.hot .rank { color: var(--vscode-foreground); }
 
 /* A finished turn ends with the anvil's spark instead of a generic tick. */
 .turn-done .spark { display: inline-flex; width: 18px; height: 10px; color: var(--forge-accent); }
 .turn-done .spark svg { width: 100%; height: 100%; }
-.turn-done.ok strong { color: var(--forge-accent); }
+.turn-done.ok strong { color: var(--vscode-foreground); }
 @media (prefers-reduced-motion: reduce) { .card.tool > button.title::before, .card.tool .verb { transition: none; } }
+
+/* Steps that change the workspace (edit, run) get a square marker; read-only steps stay round. Shape, not colour,
+   so it holds in every theme and for colour-blind readers. */
+.card.tool.effect > button.title::before { border-radius: 1px; }
+
+/* High contrast: solid surfaces with the theme's contrast border; review cards keep the accent edge. */
+.vscode-high-contrast .card.review:not(.tool), .vscode-high-contrast .card.approval, .vscode-high-contrast .card.question,
+.vscode-high-contrast-light .card.review:not(.tool), .vscode-high-contrast-light .card.approval, .vscode-high-contrast-light .card.question {
+  background-color: var(--vscode-editorWidget-background); border-color: var(--vscode-contrastBorder, var(--forge-line));
+  border-left-color: var(--forge-accent);
+}
+@media (forced-colors: active) {
+  .heat > span { forced-color-adjust: none; background: CanvasText; }
+  .heat > span.free { background: repeating-linear-gradient(135deg, GrayText 0 2px, transparent 2px 5px); }
+}
+
+/* Motion. Every movement says something happened: text is arriving, a step started or finished, the budget filled,
+   something needs you. Each runs once on new content (never on the whole log), stays under ~500ms, and uses only
+   transform, opacity and colour. Reduced motion turns all of it off below. */
+
+/* The reply being streamed ends in a caret, and the status line shimmers while the agent works. */
+.msg.assistant.streaming::after {
+  content: ''; display: inline-block; width: .45em; height: 1.05em; margin-left: 2px; vertical-align: text-bottom;
+  background: var(--forge-accent); animation: caret 1s steps(1) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
+#statusLine.running {
+  background: linear-gradient(90deg, var(--vscode-descriptionForeground) 0 35%, var(--vscode-foreground) 50%, var(--vscode-descriptionForeground) 65% 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: shimmer 1.8s linear infinite;
+}
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Steps: the rail grows down to each new step, a finished step's marker settles, and its timing fades in. */
+.card.tool + .card.tool > button.title::after, .card.thread + .card.tool > button.title::after, .card.tool + .card.thread > button.title::after {
+  transform-origin: top; animation: rail 220ms var(--ease-out) both;
+}
+@keyframes rail { from { transform: scaleY(0); } }
+.card.tool.settled > button.title::before { animation: settle 320ms var(--ease-out); }
+@keyframes settle { 0% { transform: scale(1.8); } 100% { transform: scale(1); } }
+.card .title .badge.ms { transition: opacity 200ms var(--ease-out); @starting-style { opacity: 0; } }
+
+/* Expanding a step or card opens smoothly instead of jumping. */
+.card > .body { interpolate-size: allow-keywords; transition: height 180ms var(--ease-out), opacity 160ms ease, display 180ms allow-discrete; }
+.card.collapsed > .body { display: none; height: 0; opacity: 0; }
+@starting-style { .card:not(.collapsed) > .body { height: 0; opacity: 0; } }
+
+/* Context meter: segments fill left to right in rank order, then the file rows follow. */
+.heat > span:not(.free) { transform-origin: left; animation: fill 420ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes fill { from { transform: scaleX(0); } }
+.ctx-file { animation: rise 260ms var(--ease-out) both; animation-delay: calc(120ms + var(--i, 0) * 50ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(3px); } }
+
+/* Cards that need you arrive with a brief accent wash, so they are noticed without staying loud. */
+.card.review:not(.tool), .card.approval, .card.question { animation: attention 900ms ease-out; }
+@keyframes attention { from { background-color: color-mix(in srgb, var(--forge-accent) 22%, var(--vscode-editorWidget-background)); } }
+.resolved { transition: opacity 180ms ease, transform 180ms var(--ease-out); @starting-style { opacity: 0; transform: translateY(-2px); } }
+
+/* Send and Cancel swap with a quick scale, and the end-of-turn rule draws across. */
+#send:not(.hidden), #cancel:not(.hidden) { transition: opacity 150ms ease, transform 150ms var(--ease-out); @starting-style { opacity: 0; transform: scale(.92); } }
+.turn-done::after { transform-origin: left; animation: draw 500ms var(--ease-out) both; }
+@keyframes draw { from { transform: scaleX(0); } }
+
+/* Example tasks nudge toward the pointer. */
+.example { transition: padding-left 160ms var(--ease-out), background-color 160ms ease; }
+.example:hover { padding-left: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg.assistant.streaming::after, .card.tool.settled > button.title::before, .heat > span, .ctx-file,
+  .card.review:not(.tool), .card.approval, .card.question, .turn-done::after,
+  .card.tool + .card.tool > button.title::after, .card.thread + .card.tool > button.title::after, .card.tool + .card.thread > button.title::after { animation: none; }
+  .msg.assistant.streaming::after { opacity: 1; }
+  #statusLine.running { animation: none; background: none; -webkit-text-fill-color: currentColor; }
+  .card > .body, .resolved, #send, #cancel, .example { transition: none; }
+  .example:hover { padding-left: 2px; }
+}
+@media (forced-colors: active) {
+  #statusLine.running { background: none; -webkit-text-fill-color: CanvasText; }
+  .card.review:not(.tool), .card.approval, .card.question { animation: none; }
+}
