@@ -199,3 +199,11 @@ follow-ups with a missing `import json`; not used. Second take (session `01m7svh
 reviews, 74 lines across the three files, one free-tier 429 with continue-in-place, and two agent-run
 `pytest tests/test_cli.py` commands approved. `TestConfigCommand` sits between `TestRoutes` and the next top-level
 function.
+
+Final cut (3:24) adds take E (per-hunk: one diff, three hunks, hunk 1 accepted, 2 and 3 rejected individually, only
+get_debug_flag lines land) and uses the clean Task B take from session `01m7svh3…`. Fixes found while recording:
+Esc keybinding (500f46c), context pack before the first agent turn (06b0dc2), hunk split between neighbouring changes
+(a4abb6f), panel cards collapsing to lines on overflow (eb22c58). Later B takes after those fixes were not used: one
+changed `src/flask/json/provider.py` to serialise timedelta globally (out of scope), one looped on 56 searches with
+no edit (TrueForge also crashed once mid-turn and was restarted on the same SQLite file), one broke
+`TestRoutes::test_all_methods`. `flask --help` on the chosen B workspace lists `config`.
