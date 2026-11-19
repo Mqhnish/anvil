@@ -177,7 +177,7 @@ describe('tool calls written as text', () => {
     expect(textToolCallName(qwen)).toBe('propose_edit');
     expect(textToolCallName('<tool_call>{"name": "read_file", "arguments": {"path": "a.py"}}</tool_call>')).toBe('read_file');
     expect(textToolCallName('{"name": "search_workspace", "parameters": {"query": "x"}}')).toBe('search_workspace');
-    expect(textToolCallName('I will call it:\n```\n{"function": {"name": "run_command", "arguments": "{}"}}\n```')).toBe('run_command');
+    expect(textToolCallName('```\n{"function": {"name": "run_command", "arguments": "{}"}}\n```')).toBe('run_command');
   });
   it('ignores prose, unknown tools and JSON without arguments', () => {
     expect(textToolCallName('Done: edited src/flask/helpers.py.')).toBeUndefined();
@@ -199,11 +199,27 @@ describe('tool calls written as text', () => {
     expect(second[0]).toBe('session');
     expect(second[1].input[0].content).toBe(textToolCallNudge('propose_edit'));
   });
-  it('stops nudging after two attempts and returns the reply', async () => {
+  it.each([
+    'Here is an example:\n' + qwen,
+    '<tool_call>{"name":"read_file","arguments":{"path":"a.py"}}</tool_call>\nThis illustrates how to read a file.',
+  ])('leaves an explanation containing a tool example alone', async explanation => {
     const { runner, sessions } = fixture();
-    sessions.createTurnStream.mockImplementation(async () => done(qwen));
+    sessions.createTurnStream.mockImplementation(async () => done(explanation));
+    expect(await runner.run('Explain the tool format')).toMatchObject({ status: 'done', output: explanation });
+    expect(sessions.createTurnStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails after two reminders without replaying earlier actions', async () => {
+    const { runner, sessions, decisions } = fixture();
+    sessions.createTurnStream.mockImplementationOnce(async () => {
+      decisions.recordSideEffect();
+      return done(qwen);
+    }).mockImplementation(async () => done(qwen));
     const outcome = await runner.run('change');
-    expect(outcome.status).toBe('done');
+    expect(outcome).toMatchObject({ status: 'error', modelUsed: 'primary/model', usedFallback: false, attempts: 3, sessionId: 'session' });
+    expect(outcome.message).toMatch(/propose_edit.*did not run/i);
+    expect(outcome.message).toMatch(/earlier accepted edits/i);
+    expect(sessions.create).toHaveBeenCalledTimes(1);
     expect(sessions.createTurnStream).toHaveBeenCalledTimes(3);
   });
 });

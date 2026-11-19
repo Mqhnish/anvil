@@ -81,8 +81,9 @@ export class WorkspaceMcpServer {
    * budgeted, explained context pack whether or not the model chooses to call the tool. Shows the pack card and
    * returns the rendered pack for the request.
    */
-  async prepareContext(task: string): Promise<string> {
+  async prepareContext(task: string, token?: { readonly isCancellationRequested: boolean }): Promise<string> {
     const pack = await this.retriever.assemble(task, this.opts.budgetTokens());
+    if (token?.isCancellationRequested) return '';
     this.lastPack = pack;
     this.opts.events?.onContextPack?.(pack);
     return renderPack(pack);

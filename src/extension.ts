@@ -107,9 +107,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     },
   });
   const runner = makeRunner();
+  let activeTurn: vscode.CancellationTokenSource | undefined;
   let configurationDirty = false;
-  function refreshConfiguration(): void {
-    if (!configurationDirty || svc.runner.isRunning) return;
+  function refreshConfiguration(owner?: vscode.CancellationToken): void {
+    if (!configurationDirty || svc.runner.isRunning || (activeTurn && activeTurn.token !== owner)) return;
     Object.assign(conn, createClient(cfg('trueforge.baseUrl', 'http://localhost:8790'), cfg('trueforge.token', '')));
     svc.runner = makeRunner();
     svc.registered = false;
@@ -118,15 +119,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   const svc: Services = { host, index, decisions, mcp, conn, runner, panel: undefined as unknown as AgentPanel, reviewer, status, trueforgeState: 'checking…', registered: false };
   services = svc;
+  ctx.subscriptions.push({ dispose: () => activeTurn?.cancel() });
 
   panel = new AgentPanel(ctx, {
     send: text => sendMessage(text),
     cancel: () => cancelTurn(),
-    newChat: () => { if (svc.runner.isRunning) return false; svc.runner.resetSession(); return true; },
+    newChat: () => { if (activeTurn) return false; svc.runner.resetSession(); return true; },
     openSession: () => openSession(),
     selectModel: () => vscode.commands.executeCommand('anvil.selectModel'),
     index: () => index,
-    status: () => ({ model: cfg('model.primary', '') || undefined, fallback: cfg('model.fallback', '') || undefined, trueforge: svc.trueforgeState, session: svc.runner.currentSessionId, running: svc.runner.isRunning, mcpPort: mcp.port }),
+    status: () => ({ model: cfg('model.primary', '') || undefined, fallback: cfg('model.fallback', '') || undefined, trueforge: svc.trueforgeState, session: svc.runner.currentSessionId, running: !!activeTurn, mcpPort: mcp.port }),
   });
   svc.panel = panel;
   host.commandApprover = (c, w) => panel.requestCommandApproval(c, w);
@@ -135,37 +137,65 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   // --- commands -----------------------------------------------------------------------------------------------
   const setRunning = (r: boolean) => { void vscode.commands.executeCommand('setContext', 'anvil.turnRunning', r); updateStatus(r); };
+  function finishTurn(): void {
+    activeTurn = undefined;
+    panel.flushPending();
+    setRunning(false);
+    panel.status();
+  }
+
+  async function withTurn(work: (token: vscode.CancellationToken) => Promise<void>): Promise<void> {
+    if (activeTurn) { vscode.window.showWarningMessage('Anvil: a turn is already running.'); return; }
+    const source = new vscode.CancellationTokenSource();
+    const token = source.token;
+    activeTurn = source;
+    setRunning(true);
+    panel.status();
+    try {
+      const cancelledDuringSetup = new Promise<void>(resolve => {
+        token.onCancellationRequested(() => { if (!svc.runner.isRunning) resolve(); });
+      });
+      const task = preflight(token).then(ready => {
+        if (ready && !token.isCancellationRequested) return work(token);
+      });
+      await Promise.race([task, cancelledDuringSetup]);
+    } catch (e) {
+      if (!token.isCancellationRequested) {
+        panel.post({ type: 'turn.done', status: 'error', message: describeError(e) });
+        vscode.window.showErrorMessage(`Anvil: ${describeError(e)}`);
+      }
+    } finally {
+      if (activeTurn === source) finishTurn();
+      source.dispose();
+    }
+  }
+
   async function sendMessage(text: string): Promise<void> {
     if (!text.trim()) return;
-    if (svc.runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running.'); return; }
-    if (!(await preflight())) return;
-    if (svc.runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running.'); return; }
-    panel.post({ type: 'user', text });
-    setRunning(true);
-    try {
-      // First message of a new agent session: assemble the context pack up front (shown as a card) and send it
-      // with the task, so retrieval is model-independent. Follow-ups continue from the session's history.
+    await withTurn(async token => {
+      panel.post({ type: 'user', text });
       let request = text;
       if (!svc.runner.currentSessionId) {
-        const pack = await mcp.prepareContext(text).catch(() => '');
+        const pack = await mcp.prepareContext(text, token).catch(() => '');
+        if (token.isCancellationRequested) return;
         if (pack) request = `${text}\n\n---\nAnvil assembled this context pack for the task before your first turn. Start from it; do not call assemble_context again for the same task.\n\n${pack}`;
       }
       const r = await svc.runner.run(request);
       panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts });
       if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
-    } catch (e) {
-      panel.post({ type: 'turn.done', status: 'error', message: describeError(e) });
-      vscode.window.showErrorMessage(`Anvil: ${describeError(e)}`);
-    } finally {
-      panel.flushPending();
-      setRunning(false);
-      panel.status();
-    }
+    });
   }
+
   async function cancelTurn(): Promise<void> {
-    if (!svc.runner.isRunning) return;
-    panel.flushPending();
-    await svc.runner.cancel();
+    if (!activeTurn || activeTurn.token.isCancellationRequested) return;
+    activeTurn.cancel();
+    if (svc.runner.isRunning) {
+      panel.flushPending();
+      await svc.runner.cancel();
+    } else {
+      panel.post({ type: 'turn.done', status: 'cancelled' });
+      finishTurn();
+    }
   }
   function openSession(): void {
     const sid = svc.runner.currentSessionId;
@@ -173,27 +203,34 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   }
   function updateStatus(runningOverride?: boolean): void {
     const model = cfg('model.primary', '');
-    const running = runningOverride ?? svc.runner.isRunning;
+    const running = runningOverride ?? !!activeTurn;
     status.text = running ? '$(sync~spin) Anvil' : svc.registered ? '$(tools) Anvil' : '$(warning) Anvil';
     status.tooltip = `TrueForge: ${svc.trueforgeState}\nModel: ${model || '(not set)'}\nFallback: ${cfg('model.fallback', '') || '(none)'}\nMCP: ${mcp.url}`;
     status.show();
   }
 
   /** Make sure TrueForge is reachable, our MCP server is registered, and a model is chosen. */
-  async function preflight(): Promise<boolean> {
-    refreshConfiguration();
+  async function preflight(token?: vscode.CancellationToken): Promise<boolean> {
+    refreshConfiguration(token);
     const p = await ping(conn);
+    if (token?.isCancellationRequested) return false;
     svc.trueforgeState = p.ok ? 'ok' : 'unreachable';
     if (!p.ok) {
       panel.status();
       const pick = await vscode.window.showErrorMessage(p.message, 'Start TrueForge', 'Open settings');
+      if (token?.isCancellationRequested) return false;
       if (pick === 'Start TrueForge') await vscode.commands.executeCommand('anvil.startTrueForge');
       if (pick === 'Open settings') await vscode.commands.executeCommand('workbench.action.openSettings', 'anvil.trueforge');
       return false;
     }
     if (!svc.registered) {
-      try { await registerWorkspaceMcp(conn, cfg('mcp.serverName', 'vscode-workspace'), mcp.url, mcp.secret); svc.registered = true; host.log(`[tf] registered MCP server ${cfg('mcp.serverName', 'vscode-workspace')} → ${mcp.url}`); }
-      catch (e) {
+      try {
+        await registerWorkspaceMcp(conn, cfg('mcp.serverName', 'vscode-workspace'), mcp.url, mcp.secret);
+        if (token?.isCancellationRequested) return false;
+        svc.registered = true;
+        host.log(`[tf] registered MCP server ${cfg('mcp.serverName', 'vscode-workspace')} → ${mcp.url}`);
+      } catch (e) {
+        if (token?.isCancellationRequested) return false;
         const msg = describeError(e);
         host.log(`[tf] MCP registration failed: ${msg}`);
         vscode.window.showErrorMessage(`Anvil: could not register the workspace MCP server with TrueForge: ${msg}. If it mentions a blocked URL, start TrueForge with OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1"]' (the "Anvil: Start TrueForge" command does this).`);
@@ -201,9 +238,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       }
     }
     if (!cfg('model.primary', '')) {
-      await vscode.commands.executeCommand('anvil.selectModel');
-      if (!cfg('model.primary', '')) return false;
-      configurationDirty = true; refreshConfiguration();
+      await pickModel('model.primary', 'Primary model', token);
+      if (token?.isCancellationRequested || !cfg('model.primary', '')) return false;
+      refreshConfiguration(token);
     }
     svc.trueforgeState = 'ok';
     panel.status();
@@ -218,24 +255,18 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
       if (text?.trim()) { panel.reveal(); await sendMessage(text); }
     }),
     vscode.commands.registerCommand('anvil.newChat', () => {
-      if (svc.runner.isRunning) { vscode.window.showInformationMessage('Anvil: finish or cancel the current task before starting a new chat.'); return; }
+      if (activeTurn) { vscode.window.showInformationMessage('Anvil: finish or cancel the current task before starting a new chat.'); return; }
       svc.runner.resetSession();
       panel.post({ type: 'reset' });
       panel.status('Ready when you are');
     }),
     vscode.commands.registerCommand('anvil.openSettings', () => vscode.commands.executeCommand('workbench.action.openSettings', 'anvil')),
     vscode.commands.registerCommand('anvil.cancel', () => cancelTurn()),
-    vscode.commands.registerCommand('anvil.inlineEdit', async () => {
-      if (!(await preflight())) return;
-      await runInlineEdit(svc.runner, folder.uri.fsPath, () => setRunning(true), () => {
-        panel.flushPending();
-        setRunning(false);
-        panel.status('ready');
-      }, r => panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts }));
-    }),
+    vscode.commands.registerCommand('anvil.inlineEdit', () => withTurn(token =>
+      runInlineEdit(svc.runner, folder.uri.fsPath, r => panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts }), token))),
     vscode.commands.registerCommand('anvil.selectModel', () => pickModel('model.primary', 'Primary model')),
     vscode.commands.registerCommand('anvil.selectFallbackModel', () => pickModel('model.fallback', 'Fallback model (used automatically when the primary fails)')),
-    vscode.commands.registerCommand('anvil.registerWithTrueForge', async () => { svc.registered = false; if (await preflight()) vscode.window.showInformationMessage(`Anvil: registered ${cfg('mcp.serverName', 'vscode-workspace')} → ${mcp.url}`); }),
+    vscode.commands.registerCommand('anvil.registerWithTrueForge', async () => { if (activeTurn) return; svc.registered = false; if (await preflight()) vscode.window.showInformationMessage(`Anvil: registered ${cfg('mcp.serverName', 'vscode-workspace')} → ${mcp.url}`); }),
     vscode.commands.registerCommand('anvil.startTrueForge', () => {
       const term = vscode.window.createTerminal({ name: 'TrueForge', env: { OUTBOUND_URL_ALLOWED_HOSTS: '["127.0.0.1","localhost"]' } });
       term.show();
@@ -267,8 +298,9 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   const rootFs = folder.uri.fsPath;
   function toRel(abs: string): string { return abs.slice(rootFs.length + 1).replace(/\\/g, '/'); }
 
-  async function pickModel(key: 'model.primary' | 'model.fallback', title: string): Promise<void> {
+  async function pickModel(key: 'model.primary' | 'model.fallback', title: string, token?: vscode.CancellationToken): Promise<void> {
     const p = await ping(conn);
+    if (token?.isCancellationRequested) return;
     if (!p.ok) {
       const action = await vscode.window.showErrorMessage(p.message, 'Start TrueForge', 'Open settings');
       if (action === 'Start TrueForge') await vscode.commands.executeCommand('anvil.startTrueForge');
@@ -277,6 +309,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
     let models: { name: string; provider: string; warning?: string }[] = [];
     try { models = await listModels(conn); } catch (e) { vscode.window.showErrorMessage(`Anvil: could not list models: ${describeError(e)}`); return; }
+    if (token?.isCancellationRequested) return;
     if (!models.length && key !== 'model.fallback') {
       const pick = await vscode.window.showWarningMessage('TrueForge has no models configured. Add a provider under Settings → Models (any OpenAI-compatible endpoint works), then retry.', 'Open TrueForge');
       if (pick) void vscode.env.openExternal(vscode.Uri.parse(conn.baseUrl + '/settings'));
@@ -284,8 +317,8 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     }
     const items = models.map(m => ({ label: m.name, description: m.provider, detail: m.warning }));
     if (key === 'model.fallback') items.unshift({ label: '(none)', description: 'disable automatic fallback', detail: undefined });
-    const pick = await vscode.window.showQuickPick(items, { title, placeHolder: 'Models configured in TrueForge' });
-    if (!pick) return;
+    const pick = await vscode.window.showQuickPick(items, { title, placeHolder: 'Models configured in TrueForge' }, token);
+    if (!pick || token?.isCancellationRequested) return;
     await vscode.workspace.getConfiguration('anvil').update(key, pick.label === '(none)' ? '' : pick.label, vscode.ConfigurationTarget.Workspace);
     configurationDirty = true; refreshConfiguration();
     panel.status();

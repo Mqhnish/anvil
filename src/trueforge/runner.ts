@@ -14,7 +14,7 @@
  *     the SAME session continues with a short "continue" message: nothing is replayed, so this is safe even
  *     after accepted edits. Daily quotas are not waited out.
  *   - a model that writes a tool call as text (some local and smaller models do) instead of calling the tool gets up
- *     to two short nudges on the SAME session to make the real call. Nothing ran, so nothing is replayed.
+ *     to two short nudges on the SAME session. A third text-only attempt ends the turn with an error.
  */
 import { isEventDelta, mergeEventDelta, type TrueForgeApi } from '@truefoundry/trueforge-sdk';
 import type { TrueForgeConnection } from './client';
@@ -158,10 +158,14 @@ export class TurnRunner {
             nudgeFor = undefined;
             if (r.status === 'done') {
               const written = textToolCallName(r.output);
-              if (written && textToolNudges < MAX_TEXT_TOOL_NUDGES && !this.cancelRequested) {
+              if (written) {
+                if (textToolNudges >= MAX_TEXT_TOOL_NUDGES) {
+                  const progress = this.o.decisions.hasSideEffects ? ' Review any earlier accepted edits or commands before retrying.' : '';
+                  return { status: 'error', message: `The model kept writing ${written} as text after ${textToolNudges} reminders. That tool call did not run. Choose a model with native tool calling.${progress}`, modelUsed: model, usedFallback, attempts, sessionId: sid };
+                }
                 textToolNudges++;
                 this.o.host.log(`[runner] ${model} wrote a ${written} call as text; asking for the real tool call on session ${sid}`);
-                cb.onNotice?.('info', `${model} wrote a ${written} call as text instead of calling the tool, so nothing ran. Asking it to make the real tool call (nothing is redone).`);
+                cb.onNotice?.('info', `${model} wrote a ${written} call as text instead of calling the tool, so that call did not run. Asking it to use the tool interface.`);
                 nudgeFor = written;
                 attempt--; // a nudge does not use up a retry
                 continue;
@@ -415,8 +419,8 @@ const MAX_TEXT_TOOL_NUDGES = 2;
 const KNOWN_TOOLS = new Set<string>([...Object.values(TOOL_NAMES), 'call_tool']);
 
 export function textToolCallNudge(tool: string): string {
-  return `Your last reply wrote a \`${tool}\` call as text, so nothing ran and the user saw no change. ` +
-    'Make the real tool call now through the tool-calling interface, with the same arguments. Do not write tool calls as JSON or code blocks.';
+  return `Your last reply wrote a \`${tool}\` call as text, so that call did not run. ` +
+    'If the user requested an example, explain it and leave the workspace untouched. Otherwise, if the task requires this action, use the tool-calling interface with the same arguments.';
 }
 
 /**
@@ -425,21 +429,19 @@ export function textToolCallNudge(tool: string): string {
  */
 export function textToolCallName(output: string | undefined): string | undefined {
   if (!output || !/"(?:name|tool|tool_name)"/.test(output)) return undefined;
-  const candidates = [
-    ...[...output.matchAll(/```[a-z_]*\s*([\s\S]*?)```/gi)].map(m => m[1]),
-    ...[...output.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/gi)].map(m => m[1]),
-    output,
-  ];
-  for (const candidate of candidates) {
-    const parsed = safeJson(candidate.trim());
-    for (const o of Array.isArray(parsed) ? parsed : [parsed]) {
-      if (!o || typeof o !== 'object') continue;
-      const r = o as Record<string, unknown>;
-      const fn = (r.function && typeof r.function === 'object' ? r.function : {}) as Record<string, unknown>;
-      const name = r.name ?? fn.name ?? r.tool ?? r.tool_name;
-      const args = r.arguments ?? r.parameters ?? r.input ?? fn.arguments;
-      if (typeof name === 'string' && KNOWN_TOOLS.has(name) && args !== undefined) return name;
-    }
+  const reply = output.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)```$/i.exec(reply);
+  const tagged = /^<tool_call>([\s\S]*?)<\/tool_call>$/i.exec(reply);
+  const parsed = safeJson((fenced?.[1] ?? tagged?.[1] ?? reply).trim());
+  // A single standalone call can be recovered. Prose and lists may be examples or instructions.
+  const call = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
+  if (call && typeof call === 'object' && !Array.isArray(call)) {
+    const r = call as Record<string, unknown>;
+    const fn = (r.function && typeof r.function === 'object' ? r.function : {}) as Record<string, unknown>;
+    const name = r.name ?? fn.name ?? r.tool ?? r.tool_name;
+    const args = r.arguments ?? r.parameters ?? r.input ?? fn.arguments;
+    const parameters = typeof args === 'string' && isCompleteJson(args) ? JSON.parse(args) : args;
+    if (typeof name === 'string' && KNOWN_TOOLS.has(name) && parameters && typeof parameters === 'object' && !Array.isArray(parameters)) return name;
   }
   return undefined;
 }

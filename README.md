@@ -44,12 +44,9 @@ configured **fallback model** automatically when no edit or command has run. If 
 edit or command, it stops with a clear message instead of replaying side effects. Earlier accepted edits remain
 applied; use undo to revert them. Verified by `npm run e2e` (see below).
 
-Tool calls written as text: some models (especially small local ones) occasionally answer with a `propose_edit`
-call written as JSON text instead of calling the tool, so nothing would run. Anvil detects this and sends the same
-TrueForge session a short nudge to make the real call (at most twice; nothing is replayed). The extension never runs
-the text itself, so every action still goes through TrueForge's tool loop and the hunk review. A model that only ever
-answers in text (we saw this with `qwen2.5-coder:7b` through Ollama) cannot drive Anvil; pick one with native tool
-calling.
+Some local models print a tool call as JSON. When a reply consists of one such call, Anvil gives the model up to
+two reminders in the same TrueForge session. If it prints a call again, the task ends with an error. JSON examples
+embedded in explanations stay in the chat. Edits made through the tool interface still go through hunk review.
 
 Deferred tool loading is visible in the panel: tools TrueForge loads on demand through `call_tool` carry an
 *on demand* badge, and the `list_tools` lookup is shown as *Look up tools · deferred loading*.
@@ -123,7 +120,7 @@ For the fixed Flask tasks, install `scripts/flask-test-requirements.txt` in a vi
 editable Flask checkout. The pinned pytest/Click versions avoid unrelated failures in the Flask 3.1.3 baseline.
 
 ```bash
-npm test                 # 78 tests: retrieval (incl. Task B on ../flask), edit blocks, MCP safety, cancellation, commands,
+npm test                 # retrieval (incl. Task B on ../flask), edit blocks, MCP safety, cancellation, commands,
                          #   text tool-call recovery, panel rendering, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):
                          #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation,
@@ -150,7 +147,8 @@ npm run test:live -- --free-tier-confirmed --only a
 ```
 
 Use `--only b` or `--only c` for the other tasks; omitting it runs A/B/C in order and stops at the first failure.
-Any model configured in TrueForge works: `--model <provider/model> --cost-confirmed` (or `ANVIL_LIVE_MODEL`), with
+`--free-tier-confirmed` requires `google-gemini/gemini-3-5-flash-lite`, including when choosing the model through the environment.
+To use another configured model, pass `--cost-confirmed` and select it with `--model <provider/model>` or `ANVIL_LIVE_MODEL`. Use
 `--budget <tokens>` for the context pack and `--timeout-min <n>` for slow models. Example with a local Ollama model:
 `npm run test:live -- --model ollama/qwen2-5-coder-7b-16k --cost-confirmed --only a --timeout-min 20`.
 

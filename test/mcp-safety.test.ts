@@ -98,4 +98,11 @@ it('prepares a context pack up front, announcing it like the tool does', async (
   expect(seen[0][0]).toBe('src/config_loader.py');
   expect(text).toContain('src/config_loader.py');
   expect(server.lastPack?.chosen[0].path).toBe('src/config_loader.py');
+  const previous = server.lastPack;
+  const token = { isCancellationRequested: false };
+  const pending = server.prepareContext('unrelated', token);
+  token.isCancellationRequested = true;
+  expect(await pending).toBe('');
+  expect(server.lastPack).toBe(previous);
+  expect(seen).toHaveLength(1);
 });

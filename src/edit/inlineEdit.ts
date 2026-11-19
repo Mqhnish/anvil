@@ -9,7 +9,7 @@ import { isInsideWorkspace } from '../host/paths';
 import type { TurnRunner, TurnOutcome } from '../trueforge/runner';
 import { toPosix } from '../util/text';
 
-export async function runInlineEdit(runner: TurnRunner, root: string, onStart: () => void, onDone: () => void, onOutcome?: (outcome: TurnOutcome) => void): Promise<void> {
+export async function runInlineEdit(runner: TurnRunner, root: string, onOutcome: (outcome: TurnOutcome) => void, token: vscode.CancellationToken): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) { vscode.window.showInformationMessage('Anvil: open a file and select the code to edit.'); return; }
   if (runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running (Esc to cancel).'); return; }
@@ -20,6 +20,7 @@ export async function runInlineEdit(runner: TurnRunner, root: string, onStart: (
   if (sel.isEmpty) {
     // No selection: use the enclosing symbol if the language server knows it, else the current line.
     const syms = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>('vscode.executeDocumentSymbolProvider', doc.uri).then(s => s ?? [], () => []);
+    if (token.isCancellationRequested) return;
     const enclosing = findEnclosing(syms, sel.active);
     sel = enclosing ? new vscode.Selection(enclosing.range.start, enclosing.range.end) : new vscode.Selection(doc.lineAt(sel.active.line).range.start, doc.lineAt(sel.active.line).range.end);
   }
@@ -36,8 +37,8 @@ export async function runInlineEdit(runner: TurnRunner, root: string, onStart: (
     prompt: 'What should change in the selected code?',
     placeHolder: 'e.g. Treat "off" and "n" as false as well, case-insensitively, and update the docstring',
     ignoreFocusOut: true,
-  });
-  if (!instruction) return;
+  }, token);
+  if (!instruction || token.isCancellationRequested) return;
 
   const message = [
     'INLINE EDIT',
@@ -51,20 +52,16 @@ export async function runInlineEdit(runner: TurnRunner, root: string, onStart: (
     '```',
   ].join('\n');
 
-  onStart();
-  try {
-    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Anvil: inline edit', cancellable: true }, async (progress, token) => {
-      token.onCancellationRequested(() => void runner.cancel());
-      progress.report({ message: 'asking the model…' });
-      const r = await runner.run(message, { ephemeral: true });
-      onOutcome?.(r);
-      if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
-      else if (r.status === 'cancelled') vscode.window.setStatusBarMessage('Anvil: inline edit cancelled; previously accepted edits remain applied', 4000);
-      else if (r.usedFallback) vscode.window.showInformationMessage(`Anvil: primary model failed; this edit was produced by the fallback model ${r.modelUsed}.`);
-    });
-  } catch (e) {
-    vscode.window.showErrorMessage(`Anvil: ${e instanceof Error ? e.message : String(e)}`);
-  } finally { onDone(); }
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Anvil: inline edit', cancellable: true }, async (progress, progressToken) => {
+    if (token.isCancellationRequested || progressToken.isCancellationRequested) return;
+    progressToken.onCancellationRequested(() => void runner.cancel());
+    progress.report({ message: 'asking the model…' });
+    const r = await runner.run(message, { ephemeral: true });
+    onOutcome(r);
+    if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
+    else if (r.status === 'cancelled') vscode.window.setStatusBarMessage('Anvil: inline edit cancelled; previously accepted edits remain applied', 4000);
+    else if (r.usedFallback) vscode.window.showInformationMessage(`Anvil: primary model failed; this edit was produced by the fallback model ${r.modelUsed}.`);
+  });
 }
 
 function findEnclosing(syms: vscode.DocumentSymbol[], pos: vscode.Position): vscode.DocumentSymbol | undefined {

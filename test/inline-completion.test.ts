@@ -1,3 +1,4 @@
+import type { CancellationToken } from 'vscode';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { window, Position } from './vscode-mock';
 import { runInlineEdit } from '../src/edit/inlineEdit';
@@ -11,19 +12,23 @@ beforeEach(() => {
   window.showInputBox.mockResolvedValue('test instruction');
 });
 
-it.each(['done', 'cancelled', 'error'] as const)('reports an inline %s outcome before resetting the panel', async status => {
+const token = { isCancellationRequested: false } as CancellationToken;
+
+it.each(['done', 'cancelled', 'error'] as const)('reports an inline %s outcome to the panel', async status => {
   const outcome: TurnOutcome = { status, modelUsed: 'test/model', usedFallback: false, attempts: 1 };
   const runner = { isRunning: false, run: vi.fn(async () => outcome) } as unknown as TurnRunner;
-  const order: string[] = [];
-  await runInlineEdit(runner, process.cwd(), () => order.push('start'), () => order.push('idle'), r => { expect(r).toBe(outcome); order.push('outcome'); });
-  expect(order).toEqual(['start', 'outcome', 'idle']);
+  const report = vi.fn();
+  await runInlineEdit(runner, process.cwd(), report, token);
+  expect(report).toHaveBeenCalledWith(outcome);
 });
 
-it('resets running controls after an unexpected runner exception', async () => {
-  const runner = { isRunning: false, run: vi.fn(async () => { throw new Error('transport lost'); }) } as unknown as TurnRunner;
-  const finished = vi.fn();
-  const report = vi.fn();
-  await runInlineEdit(runner, process.cwd(), vi.fn(), finished, report);
-  expect(finished).toHaveBeenCalledOnce();
-  expect(report).not.toHaveBeenCalled();
+it('skips the model if the task is cancelled while the input box is open', async () => {
+  const runner = { isRunning: false, run: vi.fn() } as unknown as TurnRunner;
+  const pending = { isCancellationRequested: false };
+  window.showInputBox.mockImplementationOnce(async () => {
+    pending.isCancellationRequested = true;
+    return 'late instruction';
+  });
+  await runInlineEdit(runner, process.cwd(), vi.fn(), pending as CancellationToken);
+  expect(runner.run).not.toHaveBeenCalled();
 });

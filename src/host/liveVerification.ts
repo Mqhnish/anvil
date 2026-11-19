@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
+import { confirmedLiveModel } from './liveModel';
 import { HeadlessHost } from './headlessHost';
 import { RepoIndex } from '../context/index';
 import { WorkspaceMcpServer } from '../mcp/server';
@@ -16,7 +17,6 @@ import { createClient, registerWorkspaceMcp, ping } from '../trueforge/client';
 const arg = (name: string, fallback: string) => process.argv[process.argv.indexOf(name) + 1] ?? fallback;
 const ROOT = path.resolve(process.argv.includes('--root') ? arg('--root', '') : '../flask');
 const TF = process.env.ANVIL_TEST_TRUEFORGE_URL ?? 'http://127.0.0.1:8790';
-const MODEL = process.argv.includes('--model') ? arg('--model', '') : process.env.ANVIL_LIVE_MODEL ?? 'google-gemini/gemini-3-5-flash-lite';
 // Slow local models (CPU-only Ollama) need more than the default 4 (A/C) or 10 (B) minutes per task.
 const TIMEOUT_MIN = Number(process.argv.includes('--timeout-min') ? arg('--timeout-min', '0') : 0);
 const BUDGET = Number(process.argv.includes('--budget') ? arg('--budget', '4000') : 4000);
@@ -30,7 +30,7 @@ function python(repo: string, args: string[]): string {
   return execFileSync(PYTHON, args, { cwd: repo, encoding: 'utf8', timeout: 120000, env: { ...process.env, PYTHONPATH: path.join(repo, 'src') } });
 }
 
-async function scenario(name: string, primary = MODEL, fallback?: string): Promise<void> {
+async function scenario(name: string, primary: string, fallback?: string): Promise<void> {
   const repo = path.join(OUTPUT, name);
   fs.cpSync(ROOT, repo, { recursive: true, filter: p => !/(^|[\/])(\.git|\.venv|__pycache__|\.pytest_cache|\.vscode)([\/]|$)/.test(p) });
   process.env.PYTHONPATH = path.join(repo, 'src');
@@ -100,10 +100,8 @@ async function scenario(name: string, primary = MODEL, fallback?: string): Promi
 }
 
 async function main(): Promise<void> {
-  if (!process.argv.includes('--free-tier-confirmed') && !process.argv.includes('--cost-confirmed')) {
-    throw new Error('This test calls a real model. Pass --free-tier-confirmed (Gemini Free Tier, billing disabled) or --cost-confirmed (a local model, or one you accept paying for).');
-  }
-  console.error(`Model: ${MODEL}; context budget ${BUDGET} tokens`);
+  const model = confirmedLiveModel(process.argv.slice(2), process.env.ANVIL_LIVE_MODEL);
+  console.error(`Model: ${model}; context budget ${BUDGET} tokens`);
   const only = process.argv.includes('--only') ? arg('--only', '') : '';
   if (only && !['a', 'b', 'c'].includes(only)) throw new Error('--only must be a, b, or c');
   const health = await ping(conn);
@@ -112,8 +110,8 @@ async function main(): Promise<void> {
   process.env.PATH = path.dirname(PYTHON) + path.delimiter + process.env.PATH;
   fs.mkdirSync(OUTPUT, { recursive: true });
   console.error(`Evidence: ${OUTPUT}`);
-  if (!only || only === 'a') await scenario('task-a');
-  if (!only || only === 'b') await scenario('task-b');
+  if (!only || only === 'a') await scenario('task-a', model);
+  if (!only || only === 'b') await scenario('task-b', model);
   if (only && only !== 'c') return;
   const provider = 'anvil-live-dead-' + Math.random().toString(36).slice(2, 10);
   const mock = spawn(process.execPath, [path.resolve('scripts/mock-model.mjs'), '--port', '0', '--fail', '503'], { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -132,7 +130,7 @@ async function main(): Promise<void> {
       body: JSON.stringify({ manifest: { type: 'custom', name: provider, base_url: `http://127.0.0.1:${port}/v1`, auth: { api_key: 'mock-key' }, models: [{ name: 'dead', model_id: 'dead', properties: { context_length: 128000, max_output_tokens: 8192 } }] } }),
     });
     if (!response.ok) throw new Error('Could not register failing provider: ' + response.status);
-    await scenario('task-c', provider + '/dead', MODEL);
+    await scenario('task-c', provider + '/dead', model);
   } finally { mock.kill(); await conn.client.settings.modelProviders.delete(provider).catch(() => {}); }
 }
 
