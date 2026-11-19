@@ -74,3 +74,13 @@ it('keeps the completed status when a cancelled command reports a late result', 
   f.message({ type: 'tool.result', name: 'run_command', text: 'terminated' });
   expect(f.document.getElementById('statusLine')?.textContent).toContain('Cancelled');
 });
+
+it('keeps updating connection and session status after the welcome screen is gone', () => {
+  const f = fixture();
+  f.message({ type: 'user', text: 'add a command' });
+  expect(f.document.getElementById('welcome')).toBeNull();
+  f.message({ type: 'status', payload: { trueforge: 'ok', model: 'test/model', session: 'abcdef123456', running: true, text: 'Working' } });
+  expect(f.document.getElementById('sessionChip')?.classList.contains('hidden')).toBe(false);
+  expect(f.document.getElementById('sessionChip')?.textContent).toContain('abcdef12');
+  expect(f.document.getElementById('tfChip')?.textContent).toBe('Connected');
+});

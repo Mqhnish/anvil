@@ -12,8 +12,13 @@
   const mentions = document.getElementById('mentions');
   const welcome = document.getElementById('welcome');
   const setup = document.getElementById('setup');
+  // Held by reference: the setup box lives inside the welcome section, which is removed once a task starts,
+  // so looking these up by id later would return null and abort every status update.
+  const setupTitle = document.getElementById('setupTitle');
+  const setupText = document.getElementById('setupText');
+  const setupAction = document.getElementById('setupAction');
   let setupCommand = 'anvil.startTrueForge';
-  document.getElementById('setupAction').addEventListener('click', () => vscode.postMessage({ type: 'command', command: setupCommand }));
+  setupAction.addEventListener('click', () => vscode.postMessage({ type: 'command', command: setupCommand }));
   document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.prompt; input.focus(); }));
   function showActivity() { welcome.remove(); }
   function finishTools() { toolCards.forEach(c => { if (c.classList.contains('running')) { c.classList.remove('running'); c.querySelector('.title').appendChild(el('span', 'badge', 'Not run')); } }); toolCards.clear(); lastToolCardByName.clear(); }
@@ -168,9 +173,9 @@
         modelChip.title = s.model ? 'Primary: ' + s.model + (s.fallback ? '\nFallback: ' + s.fallback : '\nNo fallback configured') : 'Select a model configured in TrueForge';
         const connected = s.trueforge === 'ok';
         setup.classList.toggle('hidden', connected && !!s.model);
-        document.getElementById('setupTitle').textContent = connected ? 'Choose your model' : 'Connect to TrueForge';
-        document.getElementById('setupText').textContent = connected ? 'Add a provider in TrueForge Settings → Models, then choose it here.' : 'Start the local server, configure a model, then send your task.';
-        document.getElementById('setupAction').textContent = connected ? 'Choose model' : 'Start TrueForge';
+        setupTitle.textContent = connected ? 'Choose your model' : 'Connect to TrueForge';
+        setupText.textContent = connected ? 'Add a provider in TrueForge Settings → Models, then choose it here.' : 'Start the local server, configure a model, then send your task.';
+        setupAction.textContent = connected ? 'Choose model' : 'Start TrueForge';
         setupCommand = connected ? 'anvil.selectModel' : 'anvil.startTrueForge';
         tfChip.textContent = s.trueforge === 'ok' ? 'Connected' : s.trueforge === 'checking…' ? 'Connecting…' : 'Offline';
         tfChip.className = 'chip ' + (/^ok/.test(s.trueforge) ? 'ok' : 'bad');
