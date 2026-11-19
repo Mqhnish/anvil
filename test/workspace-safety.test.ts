@@ -77,13 +77,15 @@ describe('approval lifetime', () => {
 it('stops an active command when its turn is cancelled', async () => {
   const dir = await fixture();
   const controller = new AbortController();
-  // Commands run through cmd.exe on Windows, so use node there for the delayed write.
-  const delayed = process.platform === 'win32' ? `node -e "setTimeout(() => require('fs').writeFileSync('late', ''), 400)"` : '(sleep 0.4; touch late) & wait';
+  // Commands run through cmd.exe on Windows, so use node there for the delayed write. taskkill is slower than a
+  // POSIX signal (seconds on a busy machine), so the write is delayed further there.
+  const win = process.platform === 'win32';
+  const delayed = win ? `node -e "setTimeout(() => require('fs').writeFileSync('late', ''), 3000)"` : '(sleep 0.4; touch late) & wait';
   const command = executeCommand(delayed, dir, { signal: controller.signal });
   setTimeout(() => controller.abort(), 40);
   const result = await command;
   expect(result.exitCode).toBeNull();
   expect(result.timedOut).toBe(false);
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, win ? 3500 : 500));
   expect(await fs.readdir(dir)).toEqual([]);
-});
+}, 15000);
