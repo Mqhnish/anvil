@@ -6,10 +6,10 @@
 import * as vscode from 'vscode';
 import path from 'node:path';
 import { isInsideWorkspace } from '../host/paths';
-import type { TurnRunner } from '../trueforge/runner';
+import type { TurnRunner, TurnOutcome } from '../trueforge/runner';
 import { toPosix } from '../util/text';
 
-export async function runInlineEdit(runner: TurnRunner, root: string, onStart: () => void, onDone: () => void): Promise<void> {
+export async function runInlineEdit(runner: TurnRunner, root: string, onStart: () => void, onDone: () => void, onOutcome?: (outcome: TurnOutcome) => void): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) { vscode.window.showInformationMessage('Anvil: open a file and select the code to edit.'); return; }
   if (runner.isRunning) { vscode.window.showWarningMessage('Anvil: a turn is already running (Esc to cancel).'); return; }
@@ -57,6 +57,7 @@ export async function runInlineEdit(runner: TurnRunner, root: string, onStart: (
       token.onCancellationRequested(() => void runner.cancel());
       progress.report({ message: 'asking the model…' });
       const r = await runner.run(message, { ephemeral: true });
+      onOutcome?.(r);
       if (r.status === 'error') vscode.window.showErrorMessage(`Anvil: ${r.message}`);
       else if (r.status === 'cancelled') vscode.window.setStatusBarMessage('Anvil: inline edit cancelled; previously accepted edits remain applied', 4000);
       else if (r.usedFallback) vscode.window.showInformationMessage(`Anvil: primary model failed; this edit was produced by the fallback model ${r.modelUsed}.`);

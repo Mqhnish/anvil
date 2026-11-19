@@ -199,7 +199,14 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   ctx.subscriptions.push(
     vscode.commands.registerCommand('anvil.openPanel', () => panel.reveal()),
     vscode.commands.registerCommand('anvil.cancel', () => cancelTurn()),
-    vscode.commands.registerCommand('anvil.inlineEdit', async () => { if (await preflight()) await runInlineEdit(svc.runner, folder.uri.fsPath, () => setRunning(true), () => setRunning(false)); }),
+    vscode.commands.registerCommand('anvil.inlineEdit', async () => {
+      if (!(await preflight())) return;
+      await runInlineEdit(svc.runner, folder.uri.fsPath, () => setRunning(true), () => {
+        panel.flushPending();
+        setRunning(false);
+        panel.status('ready');
+      }, r => panel.post({ type: 'turn.done', status: r.status, message: r.message, model: r.modelUsed, usedFallback: r.usedFallback, attempts: r.attempts }));
+    }),
     vscode.commands.registerCommand('anvil.selectModel', () => pickModel('model.primary', 'Primary model')),
     vscode.commands.registerCommand('anvil.selectFallbackModel', () => pickModel('model.fallback', 'Fallback model (used automatically when the primary fails)')),
     vscode.commands.registerCommand('anvil.registerWithTrueForge', async () => { svc.registered = false; if (await preflight()) vscode.window.showInformationMessage(`Anvil: registered ${cfg('mcp.serverName', 'vscode-workspace')} → ${mcp.url}`); }),

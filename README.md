@@ -110,7 +110,7 @@ extension loads it and fills in the model and server name from settings (`src/tr
 ## Tests
 
 ```bash
-npm test                 # 49 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
+npm test                 # 53 tests: retrieval, edit blocks, MCP safety, cancellation, commands, mocked editor review/undo
 npm run e2e              # headless end-to-end against a running TrueForge + the scripted mock model (scripts/mock-model.mjs):
                          #   approval→review→apply, per-hunk rejection, retry→fallback, clear error, cancellation
 node dist/headless.js assemble --root ../flask "Add a new built-in CLI command flask config …"   # print a context pack
@@ -121,7 +121,8 @@ The mock model (`scripts/mock-model.mjs`) is an OpenAI-compatible server with a 
 them. It is not used for the demo video's model.
 
 Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
-a real-model run inside VS Code and the recorded demo still need manual verification.
+Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
+A complete real-model run and the recorded demo still need verification.
 
 ## Fixed tasks (Round 1)
 

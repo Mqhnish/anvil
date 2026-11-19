@@ -7,6 +7,7 @@ export class Uri {
   static parse(p: string) { const uri = new Uri(p); uri.scheme = p.split(':')[0]; uri.query = p.split('?')[1] ?? ''; return uri; }
   toString() { return this.fsPath; }
 }
+export const ProgressLocation = { Notification: 15 };
 export class Position { constructor(public line: number, public character: number) {} }
 export class Range { constructor(..._args: unknown[]) {} }
 export class ThemeColor { constructor(readonly value: string) {} }
@@ -36,6 +37,11 @@ export const workspace = {
   }),
 };
 export const window = {
+  activeTextEditor: undefined as unknown,
+  showInputBox: vi.fn(async () => 'test instruction'),
+  withProgress: vi.fn(async (_options: unknown, task: (progress: unknown, token: unknown) => Promise<void>) => task({ report() {} }, { onCancellationRequested() { return { dispose() {} }; } })),
+  setStatusBarMessage: vi.fn(),
+  showInformationMessage: vi.fn(),
   createTextEditorDecorationType: vi.fn(disposable),
   onDidChangeVisibleTextEditors: vi.fn(disposable),
   visibleTextEditors: [],

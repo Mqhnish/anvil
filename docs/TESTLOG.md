@@ -47,3 +47,29 @@ No live UI run, model cost, video evidence, or competition score is claimed by t
 
 Cancellation is not a whole-turn rollback: previously accepted edits remain applied. Approved shell commands
 run with the user's host permissions; path validation on file tools does not sandbox arbitrary shell commands.
+
+
+## Interactive VS Code check — 19 November 2026
+
+Launched the installed VS Code 1.143.1 Extension Development Host with Anvil and a disposable copy of Flask.
+TrueForge 0.185.1 and the scripted `mock/mock-coder` provider ran locally. This was an actual editor run,
+not the mocked VS Code API used by the automated editor tests.
+
+Observed and verified:
+
+- The Anvil activity-bar view rendered its model, connection, tool-call and review cards after initialization.
+- The macOS inline-edit shortcut opened the instruction dialog and a native diff proposal.
+- Accept All Hunks closed the review and saved the scripted change. The change was verified on disk.
+- Undo Last Applied Change restored the test file byte-for-byte to the original Flask baseline.
+- A second proposal was rejected through Reject All Hunks; the test file remained identical to the baseline.
+- The original Flask checkout was not changed.
+
+The UI run exposed a completion-state bug: inline turns did not emit `turn.done` to the panel, which could leave
+its status at “thinking…” and controls in their previous state. Inline outcomes now use the panel's completion
+message and reset pending approvals, running state and status afterward. Four regression cases cover successful,
+cancelled and failed outcomes, plus unexpected exceptions. The updated suite passes 53 tests across 8 files;
+typecheck and build also pass.
+
+The desktop automation intermittently returned stale or invalid accessibility elements during this run.
+Interactive cancellation and individual per-hunk CodeLens clicks were not reliably verified. No real model
+provider was configured in this environment, so full real-model Tasks A/B/C and the demo recording remain open.

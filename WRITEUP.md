@@ -109,8 +109,8 @@ VS Code Extension API docs; `pallets/flask` 3.1.3 as the fixed repository. [Add 
 
 ## 8. Known limitations and the next month
 
-Automated verification on 18 November: 49 tests, typecheck, build, and all five TrueForge/mock-model
-end-to-end scenarios passed. See `docs/TESTLOG.md`. Actual VS Code UI interaction and real-model Tasks A/B/C
+Automated verification on 19 November: 53 tests, typecheck, build, and all five TrueForge/mock-model
+end-to-end scenarios passed. See `docs/TESTLOG.md`. Interactive smoke checks cover the panel, inline shortcut, accept/reject and undo. Full real-model Tasks A/B/C
 remain unverified; video links and scorecard timestamps above must be filled from the recording.
 
 - Retrieval is lexical; a hybrid with a small local embedding index over the same symbol chunks is the obvious next
