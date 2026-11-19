@@ -105,6 +105,15 @@ describe.skipIf(!hasFlask)('retriever on pallets/flask 3.1.3 (Task B)', () => {
     expect(cli.text).toMatch(/routes_command|add_command/);
   });
 
+  it('Task B at a 4k budget: the file being extended leads, with a sibling example, then its tests and docs', async () => {
+    const task = 'Add a new built-in CLI command flask config that prints the loaded application\'s configuration as JSON, masking the values of any key containing SECRET, PASSWORD, TOKEN or KEY as "***". It must appear in flask --help, be covered by a test, and be documented alongside the other built-in commands.';
+    const pack = await new Retriever(index, host).assemble(task, 4000);
+    expect(pack.chosen.slice(0, 3).map(c => c.path)).toEqual(['src/flask/cli.py', 'tests/test_cli.py', 'docs/cli.rst']);
+    expect(pack.chosen[0].reason).toMatch(/existing command pattern to mirror \(run_command, shell_command, routes_command\)/);
+    expect(pack.chosen[0].text).toMatch(/def (shell|routes)_command/);
+    expect(pack.usedTokens).toBeLessThanOrEqual(4000);
+  });
+
   it('Task A: resolves @get_debug_flag to helpers.py', () => {
     const r = resolveMentions(index, ['get_debug_flag']);
     expect(r[0].path).toBe('src/flask/helpers.py');

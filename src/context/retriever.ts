@@ -144,6 +144,50 @@ export class Retriever {
       c.reasons.push(`path matches (${terms.filter(t => !STRUCTURAL.has(t)).join(', ')})`);
     }
 
+    // 3b. Extension points. "Add a new built-in CLI command …" should start from the source file that already holds
+    // several of that kind of thing (run_command, shell_command, routes_command): the new one is defined and
+    // registered there, and its siblings are the pattern to copy. Kind terms come from the words after the verb.
+    const addPhrase = /\b(?:add|create|implement|introduce|register)\b((?:[\s-]+[A-Za-z_]+){1,8})/i.exec(task);
+    let extension: { c: Cand; boost: number } | undefined;
+    if (addPhrase) {
+      const kinds = [...new Set(queryTerms(addPhrase[1]))].filter(k => !STRUCTURAL.has(k) && rarity(k) >= 0.5);
+      let best: { path: string; kind: string; names: string[] } | undefined;
+      for (const f of this.index.files.values()) {
+        if (isAux(f.path)) continue;
+        for (const k of kinds) {
+          // Top-level definitions named like the kind (run_command, shell_command) are the clearest examples: list them
+          // first, then other top-level matches, then methods.
+          const namedLikeKind = (n: string) => new RegExp(`_${k}s?$`, 'i').test(n);
+          const rank = (s: { name: string; container?: string }) => (namedLikeKind(s.name) ? 0 : 2) + (s.container ? 1 : 0);
+          const matching = f.outline.filter(s => splitIdentifier(s.name).map(stem).includes(k)).sort((a, b) => rank(a) - rank(b) || a.startLine - b.startLine);
+          const names = [...new Set(matching.map(s => s.name))];
+          if (names.length >= 3 && (!best || names.length > best.names.length)) best = { path: f.path, kind: k, names };
+        }
+      }
+      if (best) {
+        const c = cand(best.path);
+        // Applied after neighbour expansion, so its tests and docs do not inherit the boost and outrank it.
+        extension = { c, boost: 8 + Math.min(best.names.length, 6) };
+        c.reasons.unshift(`existing ${best.kind} pattern to mirror (${best.names.slice(0, 3).join(', ')})`);
+        // Seed the smallest sibling definitions, and the place they are registered, so the example lands in the pack.
+        const f = this.index.files.get(best.path);
+        const lead = Math.max(1, ...[...c.chunks.values()].map(r => r.score));
+        const examples = best.names.slice(0, 3);
+        const isSibling = (ch: Chunk) => !!ch.symbol && examples.some(n => ch.symbol === n || ch.symbol!.endsWith('.' + n));
+        const siblings = (f?.chunks ?? []).filter(ch => isSibling(ch) && ch.tokens <= 600).sort((a, b) => a.tokens - b.tokens).slice(0, 2);
+        const registration = (f?.chunks ?? []).find(ch => !siblings.includes(ch) && examples.some(n => (ch.text.includes(`(${n})`) || ch.text.includes(`(${n},`)) && !ch.text.includes(`def ${n}`)));
+        // Priority within the file: one complete example, then where the siblings are registered, then the second
+        // example. These go ahead of plain keyword hits so a small budget still carries the pattern to copy.
+        const ordered = [siblings[0], registration && registration.tokens <= 600 ? registration : undefined, siblings[1]].filter((ch): ch is Chunk => !!ch);
+        for (const [i, ch] of ordered.entries()) {
+          const seeded = lead * (1.03 - i * 0.01);
+          const existing = c.chunks.get(ch.id);
+          if (!existing) c.chunks.set(ch.id, { chunk: ch, score: seeded, matched: [best.kind] });
+          else existing.score = Math.max(existing.score, seeded);
+        }
+      }
+    }
+
     // 4. open editors
     const open = await this.host.openFiles().catch(() => []);
     for (const o of open) {
@@ -156,6 +200,7 @@ export class Retriever {
     // 5. neighbour expansion for the top-ranked source files
     const ranked = [...cands.values()].sort((a, b) => b.score - a.score);
     const seeds = ranked.filter(c => !/(^|\/)(tests?|docs?)\//.test(c.path)).slice(0, 6);
+    if (extension && !seeds.includes(extension.c)) seeds.push(extension.c);
     for (const s of seeds) {
       const f = this.index.files.get(s.path);
       if (!f) continue;
@@ -164,6 +209,17 @@ export class Retriever {
       for (const imp of this.index.resolveImports(f).slice(0, 8)) { const c = cand(imp); c.score += s.score * 0.2; c.reasons.push(`imported by ${s.path}`); }
     }
     // docs/tests that themselves matched strongly already have their own score; nothing else to do.
+    if (extension) {
+      extension.c.score += extension.boost;
+      // Its own tests and docs show how the existing siblings are tested and documented: keep them ahead of files
+      // that only share a word with the task (e.g. config tests for "flask config").
+      const p = extension.c.path;
+      for (const tp of TEST_PATTERNS(p)) if (tp !== p && cands.has(tp)) { cands.get(tp)!.score += 5; cands.get(tp)!.reasons.unshift(`how existing ${p.split('/').pop()} features are tested`); }
+      for (const dp of DOC_PATTERNS(p)) if (cands.has(dp)) { cands.get(dp)!.score += 7; cands.get(dp)!.reasons.unshift(`how existing ${p.split('/').pop()} features are documented`); }
+      // The file being extended leads its own tests and docs.
+      const neighbours = [...TEST_PATTERNS(p), ...DOC_PATTERNS(p)].map(n => cands.get(n)?.score ?? 0);
+      if (!extension.c.mentioned) extension.c.score = Math.max(extension.c.score, ...neighbours.map(s => s + 1));
+    }
 
     // Pack
     const final = [...cands.values()].sort((a, b) => b.score - a.score);
