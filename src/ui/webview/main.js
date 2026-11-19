@@ -37,7 +37,10 @@
   function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 
   // Tool steps read as actions ("Read src/flask/cli.py L1–120"); the raw tool name stays in the tooltip.
-  const TOOL_VERBS = { read_file: 'Read', list_dir: 'List', search_workspace: 'Search', find_symbols: 'Find symbols', assemble_context: 'Assemble context', get_diagnostics: 'Diagnostics', open_editors: 'Open editors', propose_edit: 'Propose edit', run_command: 'Run', git_status: 'Git status' };
+  const TOOL_VERBS = { read_file: 'Read', list_dir: 'List', search_workspace: 'Search', find_symbols: 'Find symbols', assemble_context: 'Assemble context', get_diagnostics: 'Diagnostics', open_editors: 'Open editors', propose_edit: 'Propose edit', run_command: 'Run', git_status: 'Git status', list_tools: 'Look up tools' };
+  // TrueForge deferred tool loading: only a few tools are preloaded; the agent looks the rest up (list_tools) and
+  // calls them through call_tool. Label both so the harness feature is visible in the log.
+  const DEFERRED_HINT = 'Loaded on demand through TrueForge deferred tool loading (call_tool), not preloaded into the prompt';
   const SPARK = '<svg viewBox="104 4 40 22" aria-hidden="true"><path d="m112 17-2-9m11 7 5-9m2 16 9-5" stroke="currentColor" stroke-width="3" stroke-linecap="square" fill="none"/></svg>';
   const EFFECT_TOOLS = new Set(['propose_edit', 'run_command']);
   function toolVerb(name) { return TOOL_VERBS[name] || name; }
@@ -217,10 +220,12 @@
         let args = m.args, parsed;
         try { parsed = JSON.parse(m.args); args = Object.entries(parsed).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v.slice(0, 400) : JSON.stringify(v).slice(0, 400))).join('\n'); } catch { }
         const target = toolTarget(m.name, parsed);
-        const title = '<span class="verb">' + esc(toolVerb(m.name)) + '</span>' + (target ? '<span class="target">' + esc(target) + '</span>' : '') + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : '');
+        const deferredBadge = m.deferred ? ' <span class="badge deferred" title="' + esc(DEFERRED_HINT) + '">on demand</span>'
+          : m.name === 'list_tools' ? ' <span class="badge deferred" title="' + esc(DEFERRED_HINT) + '">deferred loading</span>' : '';
+        const title = '<span class="verb">' + esc(toolVerb(m.name)) + '</span>' + (target ? '<span class="target">' + esc(target) + '</span>' : '') + deferredBadge + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : '');
         // Steps that change the workspace get a square marker, so they stand out without relying on colour.
         const c = card('tool running' + (EFFECT_TOOLS.has(m.name) ? ' effect' : ''), title, args, true);
-        c.querySelector('.title').title = m.name;
+        c.querySelector('.title').title = m.deferred ? 'call_tool → ' + m.name : m.name;
         toolCards.set(m.id, c);
         lastToolCardByName.set(m.name, c);
         statusLine.textContent = toolVerb(m.name) + (target ? ' ' + target : '') + '…';

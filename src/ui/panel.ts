@@ -25,7 +25,7 @@ type ToWebview =
   | { type: 'user'; text: string }
   | { type: 'delta'; threadId: string; text: string }
   | { type: 'thread'; threadId: string; title: string; parent?: string; done?: boolean }
-  | { type: 'tool.call'; threadId: string; id: string; name: string; args: string }
+  | { type: 'tool.call'; threadId: string; id: string; name: string; args: string; deferred?: boolean }
   | { type: 'tool.result'; id?: string; name: string; text: string; ms?: number }
   | { type: 'context.pack'; pack: Omit<ContextPack, 'chosen'> & { chosen: Omit<ContextPack['chosen'][number], 'text'>[] } }
   | { type: 'review'; path: string; hunks: number }

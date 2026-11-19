@@ -84,3 +84,17 @@ it('keeps updating connection and session status after the welcome screen is gon
   expect(f.document.getElementById('sessionChip')?.textContent).toContain('abcdef12');
   expect(f.document.getElementById('tfChip')?.textContent).toBe('Connected');
 });
+
+it('labels tools that TrueForge loaded on demand, and the tool lookup itself', () => {
+  const f = fixture();
+  f.message({ type: 'tool.call', threadId: 'main', id: 'a', name: 'list_tools', args: '{}' });
+  f.message({ type: 'tool.call', threadId: 'main', id: 'b', name: 'assemble_context', args: '{"task":"x"}', deferred: true });
+  f.message({ type: 'tool.call', threadId: 'main', id: 'c', name: 'read_file', args: '{"path":"a.py"}' });
+  const titles = Array.from(f.document.querySelectorAll('.card.tool .title') as ArrayLike<Element>, t => t.textContent);
+  expect(titles[0]).toContain('Look up tools');
+  expect(titles[0]).toContain('deferred loading');
+  expect(titles[1]).toContain('Assemble context');
+  expect(titles[1]).toContain('on demand');
+  expect(titles[2]).not.toContain('on demand');
+  expect((f.document.querySelectorAll('.card.tool .title')[1] as HTMLElement).getAttribute('title')).toBe('call_tool → assemble_context');
+});

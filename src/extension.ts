@@ -92,7 +92,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     maxRetries: cfg('resilience.maxRetries', 2),
     callbacks: {
       onDelta: (threadId, text) => panel.post({ type: 'delta', threadId, text }),
-      onToolCall: (threadId, name, args, id) => panel.post({ type: 'tool.call', threadId, name, args, id }),
+      onToolCall: (threadId, name, args, id, meta) => panel.post({ type: 'tool.call', threadId, name, args, id, deferred: meta?.deferred }),
       onStatus: text => panel.status(text),
       onNotice: (level, text) => { panel.post({ type: 'notice', level, text }); if (level === 'error') vscode.window.showErrorMessage('Anvil: ' + text); else if (level === 'warn') vscode.window.setStatusBarMessage('Anvil: ' + text, 6000); },
       onSession: () => panel.status(),

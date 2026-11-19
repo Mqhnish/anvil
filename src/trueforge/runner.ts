@@ -31,7 +31,8 @@ export type Ev = TrueForgeApi.TurnStreamingEvent;
 export interface RunnerCallbacks {
   onEvent?(e: Ev): void;
   onDelta?(threadId: string, text: string): void;
-  onToolCall?(threadId: string, name: string, args: string, id: string): void;
+  /** `deferred`: the tool was loaded on demand through TrueForge's call_tool (deferred tool loading). */
+  onToolCall?(threadId: string, name: string, args: string, id: string, meta?: { deferred: boolean }): void;
   onStatus?(text: string): void;
   onNotice?(level: 'info' | 'warn' | 'error', text: string): void;
   onSession?(sessionId: string, model: string): void;
@@ -312,7 +313,7 @@ export class TurnRunner {
       if (tc.function.arguments && !isCompleteJson(tc.function.arguments)) continue;
       this.announced.add(tc.id);
       const call = this.findToolCall({ id: tc.id, sourceEventId: msg.id });
-      this.o.callbacks.onToolCall?.(msg.threadId, call?.name ?? tc.function.name, typeof call?.args === 'object' ? JSON.stringify(call.args) : tc.function.arguments, tc.id);
+      this.o.callbacks.onToolCall?.(msg.threadId, call?.name ?? tc.function.name, typeof call?.args === 'object' ? JSON.stringify(call.args) : tc.function.arguments, tc.id, { deferred: !!call?.deferred });
     }
   }
 
@@ -377,7 +378,7 @@ export class TurnRunner {
     return { type: 'user.tool_response', threadId, toolCallId: ref.id, content };
   }
 
-  private findToolCall(ref: TrueForgeApi.ToolCallRef): { name: string; args: unknown } | undefined {
+  private findToolCall(ref: TrueForgeApi.ToolCallRef): { name: string; args: unknown; deferred?: boolean } | undefined {
     const msg = this.events.get(ref.sourceEventId);
     if (msg?.type !== 'model.message') return undefined;
     const tc = msg.toolCalls?.find(t => t.id === ref.id);
@@ -389,7 +390,7 @@ export class TurnRunner {
       const a = args as Record<string, unknown>;
       const inner = (a.tool_name ?? a.tool ?? a.name) as string | undefined;
       const input = (a.input ?? a.arguments ?? a.args ?? a.body) as unknown;
-      if (inner) { name = inner; args = typeof input === 'string' ? safeJson(input) : input ?? {}; }
+      if (inner) { name = inner; args = typeof input === 'string' ? safeJson(input) : input ?? {}; return { name, args, deferred: true }; }
     }
     return { name, args };
   }
