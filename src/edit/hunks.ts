@@ -56,13 +56,15 @@ export interface HunkSet {
   newText: string;
 }
 
-export function computeHunks(oldText: string, newText: string, context = 3): HunkSet {
+export function computeHunks(oldText: string, newText: string, context = 3, mergeGap = context): HunkSet {
   const parts = toParts(oldText, newText);
   const hunks: Hunk[] = [];
   let oldLine = 1;
   let newLine = 1;
 
-  // Find change groups: runs of parts that are added/removed, merged when separated by <= 2*context ctx lines.
+  // Find change groups: runs of parts that are added/removed, merged when separated by <= mergeGap unchanged lines.
+  // Smaller than git's 2*context on purpose: a reviewer should be able to accept one function's change and reject
+  // its neighbour's. Applying works on parts, so the displayed context of adjacent hunks may overlap harmlessly.
   interface Group { start: number; end: number; }
   const groups: Group[] = [];
   let i = 0;
@@ -74,7 +76,7 @@ export function computeHunks(oldText: string, newText: string, context = 3): Hun
       const p = parts[j];
       if (p.added || p.removed) { end = j; j++; continue; }
       // context part: merge only if small
-      if (p.lines.length <= 2 * context && j + 1 < parts.length && (parts[j + 1].added || parts[j + 1].removed)) { j++; continue; }
+      if (p.lines.length <= mergeGap && j + 1 < parts.length && (parts[j + 1].added || parts[j + 1].removed)) { j++; continue; }
       break;
     }
     groups.push({ start: i, end });

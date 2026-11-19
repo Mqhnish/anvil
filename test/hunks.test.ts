@@ -63,3 +63,13 @@ describe('hunks', () => {
     expect(set.hunks.length).toBe(1);
   });
 });
+
+describe('review granularity', () => {
+  it('keeps changes in neighbouring functions as separate hunks so each can be decided alone', () => {
+    const before = ['def a():', '    """Doc a."""', '    return 1', '', '', 'def b():', '    """Doc b."""', '    return 2', ''].join('\n');
+    const after = ['def a():', '    """Doc a, changed."""', '    return 1', '', '', 'def b():', '    """Doc b, changed."""', '    return 2', ''].join('\n');
+    const set = computeHunks(before, after);
+    expect(set.hunks).toHaveLength(2);
+    expect(applyHunks(set, new Set([0]))).toBe(before.replace('Doc a.', 'Doc a, changed.'));
+  });
+});
