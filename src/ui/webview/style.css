@@ -53,29 +53,46 @@ textarea#input { width: 100%; resize: vertical; background: var(--vscode-input-b
 @keyframes blink { 50% { opacity: 0.2; } }
 /* Native theme tokens keep the panel legible in dark, light and high-contrast themes. */
 #app { min-width: 0; position: relative; }
-header#status { display: block; padding: 14px 12px 10px; }
-.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.brand strong { font-size: 15px; letter-spacing: -0.3px; }
-.brand > span, .eyebrow { color: var(--vscode-descriptionForeground); font-size: 10px; }
-.brand > span { border-left: 1px solid var(--vscode-panel-border); padding-left: 8px; }
-.connection { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip { max-width: 100%; font-size: 10px; padding: 3px 7px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-editorWidget-background); color: var(--vscode-descriptionForeground); }
-button.chip { color: var(--vscode-foreground); }
-.chip.ok { background: transparent; color: var(--vscode-testing-iconPassed); border-color: var(--vscode-testing-iconPassed); }
-.chip.bad { background: transparent; color: var(--vscode-errorForeground); }
-#tfChip { cursor: default; }
-main#log { padding: 12px; min-height: 0; gap: 12px; }
-.welcome { padding: 18px 2px 8px; }
-.eyebrow { letter-spacing: 1px; font-weight: 600; font-size: 9px; }
-.welcome h1 { font-size: 23px; font-weight: 600; letter-spacing: -0.6px; line-height: 1.2; margin: 12px 0; }
-.welcome p { color: var(--vscode-descriptionForeground); line-height: 1.6; margin: 0 0 16px; font-size: 12px; }
-.setup { border: 1px solid var(--vscode-panel-border); background: var(--vscode-editorWidget-background); border-radius: 7px; padding: 12px; margin: 20px 0; }
+#app {
+  --forge-accent: #f3ab71;
+  --forge-ink: #473a33;
+  --forge-shade: #776357;
+  --forge-mid: #c89975;
+  --forge-face: #f6ca9e;
+  --forge-line: var(--vscode-panel-border, #525252);
+  --forge-mono: var(--vscode-editor-font-family, ui-monospace, monospace);
+}
+.vscode-light #app, .vscode-high-contrast-light #app { --forge-accent: #954318; }
+header#status { display: block; padding: 14px 16px 10px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.brand strong { font-size: 19px; font-weight: 850; font-style: italic; letter-spacing: -1px; text-transform: uppercase; }
+.brand > span { color: var(--vscode-descriptionForeground); font: 10px var(--forge-mono); }
+.connection { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { max-width: 100%; font: 10px var(--forge-mono); padding: 3px 5px; border: 1px solid var(--forge-line); border-radius: 3px; background: transparent; color: var(--vscode-foreground); }
+#tfChip { border: 0; background: transparent; color: var(--vscode-descriptionForeground); cursor: default; }
+#tfChip::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; background: currentColor; }
+#tfChip.ok::before { background: var(--vscode-testing-iconPassed); }
+#tfChip.bad { color: var(--vscode-errorForeground); }
+main#log { padding: 14px 16px; min-height: 0; gap: 12px; }
+.welcome { padding: 2px 0; }
+.forge-print {
+  display: grid; place-items: center; height: clamp(72px, 18vh, 134px); overflow: hidden;
+  border: 1px solid var(--forge-line); color: var(--forge-accent);
+  background-color: color-mix(in srgb, var(--forge-accent) 5%, var(--vscode-editor-background));
+  background-image: radial-gradient(color-mix(in srgb, currentColor 28%, transparent) .85px, transparent 1px);
+  background-size: 12px 12px;
+}
+.forge-print svg { height: 100%; max-width: 100%; }
+.welcome h1 { font-size: clamp(23px, 7vw, 32px); letter-spacing: -.045em; line-height: 1.1; margin: 16px 0 6px; }
+.welcome p { color: var(--vscode-descriptionForeground); line-height: 1.5; margin: 0 0 14px; font-size: 12px; }
+.setup { border: 1px solid var(--forge-line); padding: 12px; margin: 14px 0; }
 .setup p { margin: 6px 0 12px; }
-.examples { display: grid; gap: 8px; margin: 22px 0; }
-.example { text-align: left; padding: 11px; background: transparent; border: 1px solid var(--vscode-panel-border); font-size: 12px; }
-.example span { display: block; font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 4px; }
+.examples { border-top: 1px solid var(--forge-line); }
+.example { display: block; width: 100%; position: relative; text-align: left; padding: 10px 28px 10px 2px; border: 0; border-bottom: 1px solid var(--forge-line); border-radius: 0; background: transparent; color: var(--vscode-foreground); font-weight: 600; }
+.example::after { content: '↗'; position: absolute; right: 4px; top: 12px; color: var(--forge-accent); }
+.example span { display: block; font-size: 11px; margin-top: 3px; font-weight: 400; color: var(--vscode-descriptionForeground); }
 .example:hover { background: var(--vscode-list-hoverBackground); }
-.welcome-note { color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1.7; }
+.welcome-note { margin-top: 12px; font-size: 11px; color: var(--vscode-descriptionForeground); }
 button:hover:not(:disabled) { filter: brightness(1.08); }
 button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 .card { padding: 0; overflow: hidden; }
@@ -99,3 +116,12 @@ textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding:
 #mentions { bottom: 155px; }
 @media (max-width: 250px) { .brand > span { display: none; } .hint { flex-basis: 100%; } .row { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
+
+.composer { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--forge-line)); border-radius: 6px; padding: 3px; }
+.composer:focus-within { border-color: var(--vscode-focusBorder); }
+.composer textarea#input { display: block; border: 0; background: transparent; min-height: 54px; }
+.composer .row { padding: 0 5px 5px; margin-top: 2px; }
+#send { background: var(--forge-accent); color: #22170f; font-weight: 650; }
+.vscode-light #send, .vscode-high-contrast-light #send { color: white; }
+.card.review { border-left-color: var(--forge-accent); background: color-mix(in srgb, var(--forge-accent) 6%, var(--vscode-editorWidget-background)); }
+@media (max-height: 460px) { .forge-print { display: none; } .welcome h1 { margin-top: 0; } }

@@ -190,7 +190,7 @@
         currentAssistant = null; // next deltas start a new assistant bubble
         let args = m.args;
         try { const a = JSON.parse(m.args); args = Object.entries(a).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v.slice(0, 400) : JSON.stringify(v).slice(0, 400))).join('\n'); } catch { }
-        const c = card('tool running', '🔧 ' + esc(m.name) + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : ''), args, true);
+        const c = card('tool running', esc(m.name) + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : ''), args, true);
         toolCards.set(m.id, c);
         lastToolCardByName.set(m.name, c);
         statusLine.textContent = 'running ' + m.name + '…';
@@ -230,7 +230,7 @@
         }
         break;
       }
-      case 'review': { card('review', '👀 Reviewing ' + esc(m.path) + ' — ' + m.hunks + ' hunk' + (m.hunks === 1 ? '' : 's') + ' (accept/reject each in the diff editor)', undefined, true); statusLine.textContent = 'waiting for your review of ' + m.path; break; }
+      case 'review': { card('review', 'Review ' + esc(m.path), m.hunks + ' proposed hunk' + (m.hunks === 1 ? '' : 's') + ' · Accept or reject in the diff editor.', false); statusLine.textContent = 'waiting for your review of ' + m.path; break; }
       case 'approval': {
         const c = card('approval', '⚠️ Run command?', (m.cwd ? '(in ' + m.cwd + ')\n' : '') + '$ ' + m.command, false);
         const row = el('div', 'row');
