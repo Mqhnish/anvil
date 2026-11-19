@@ -16,7 +16,7 @@
   document.getElementById('setupAction').addEventListener('click', () => vscode.postMessage({ type: 'command', command: setupCommand }));
   document.querySelectorAll('.example').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.prompt; input.focus(); }));
   function showActivity() { welcome.remove(); }
-  function finishTools() { toolCards.forEach(c => { if (c.classList.contains('running')) { c.classList.remove('running'); c.querySelector('.title').appendChild(el('span', 'badge', 'not run')); } }); toolCards.clear(); lastToolCardByName.clear(); }
+  function finishTools() { toolCards.forEach(c => { if (c.classList.contains('running')) { c.classList.remove('running'); c.querySelector('.title').appendChild(el('span', 'badge', 'Not run')); } }); toolCards.clear(); lastToolCardByName.clear(); }
 
 
   let running = false;
@@ -28,6 +28,19 @@
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function scroll() { log.scrollTop = log.scrollHeight; }
   function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+  // Tool steps read as actions ("Read src/flask/cli.py L1–120"); the raw tool name stays in the tooltip.
+  const TOOL_VERBS = { read_file: 'Read', list_dir: 'List', search_workspace: 'Search', find_symbols: 'Find symbols', assemble_context: 'Assemble context', get_diagnostics: 'Diagnostics', open_editors: 'Open editors', propose_edit: 'Propose edit', run_command: 'Run', git_status: 'Git status' };
+  const SPARK = '<svg viewBox="104 4 40 22" aria-hidden="true"><path d="m112 17-2-9m11 7 5-9m2 16 9-5" stroke="currentColor" stroke-width="3" stroke-linecap="square" fill="none"/></svg>';
+  function toolVerb(name) { return TOOL_VERBS[name] || name; }
+  function toolTarget(name, a) {
+    if (!a || typeof a !== 'object') return '';
+    if (name === 'read_file' && a.path) return a.path + (a.start_line ? ' L' + a.start_line + (a.end_line ? '–' + a.end_line : '') : '');
+    if (name === 'search_workspace' || name === 'find_symbols') return a.query ? '"' + a.query + '"' : '';
+    if (name === 'run_command') return a.command || '';
+    if (name === 'assemble_context') return '';
+    return a.path || a.query || '';
+  }
 
   // Tiny markdown: fenced code, inline code, bold, bullets, links to files (path:line).
   function md(text) {
@@ -54,6 +67,7 @@
     c.appendChild(t);
     const b = el('div', 'body');
     if (body !== undefined) b.textContent = body;
+    if (kind.split(' ')[0] !== 'tool') b.classList.add('prose');
     c.appendChild(b);
     showActivity();
     log.appendChild(c);
@@ -83,7 +97,7 @@
   function send() {
     const text = input.value.trim();
     if (!text || running) return;
-    setRunning(true, 'Checking connection…');
+    setRunning(true, 'Checking the connection…');
     hideMentions();
     vscode.postMessage({ type: 'send', text });
   }
@@ -126,7 +140,7 @@
     if (!mentionItems.length) { hideMentions(); return; }
     mentionItems.forEach((it, i) => {
       const d = el('div', i === mentionSel ? 'sel' : '');
-      d.appendChild(el('span', '', (it.kind === 'symbol' ? 'ƒ ' : '📄 ') + it.label));
+      const lab = el('span', 'label', it.label); lab.dataset.kind = it.kind === 'symbol' ? 'symbol' : 'file'; d.appendChild(lab);
       d.appendChild(el('span', 'd', it.detail));
       d.addEventListener('mousedown', ev => { ev.preventDefault(); applyMention(it); });
       mentions.appendChild(d);
@@ -166,14 +180,14 @@
         if (typeof s.running === 'boolean' && s.running !== running) setRunning(s.running, s.text ?? (s.running ? 'Working…' : 'Ready'));
         break;
       }
-      case 'user': { showActivity(); if (input.value.trim() === m.text.trim()) input.value = ''; const u = el('div', 'msg user', m.text); log.appendChild(u); setRunning(true, 'sending…'); currentAssistant = null; scroll(); break; }
+      case 'user': { showActivity(); if (input.value.trim() === m.text.trim()) input.value = ''; const u = el('div', 'msg user', m.text); log.appendChild(u); setRunning(true, 'Sending…'); currentAssistant = null; scroll(); break; }
       case 'delta': {
         showActivity();
         let target;
         if (!threadEls.has(m.threadId)) target = ensureAssistant();
         else {
           target = threadEls.get(m.threadId);
-          if (!target) { const c = card('thread', '🧵 sub-agent ' + esc(m.threadId), '', true); target = c.querySelector('.body'); target.dataset.raw = ''; threadEls.set(m.threadId, target); }
+          if (!target) { const c = card('thread', 'Sub-agent ' + esc(m.threadId), '', true); target = c.querySelector('.body'); target.dataset.raw = ''; threadEls.set(m.threadId, target); }
         }
         target.dataset.raw += m.text;
         if (target.classList.contains('msg')) target.innerHTML = md(target.dataset.raw); else target.textContent = target.dataset.raw;
@@ -182,18 +196,21 @@
       }
       case 'thread': {
         if (m.done) { const t = threadEls.get(m.threadId); if (t) t.parentElement.querySelector('.badge')?.remove(); break; }
-        const c = card('thread', '🧵 sub-agent: ' + esc(m.title) + ' <span class="badge">running</span>', '', true);
+        const c = card('thread', 'Sub-agent: ' + esc(m.title) + ' <span class="badge">Running</span>', '', true);
         const b = c.querySelector('.body'); b.dataset.raw = ''; threadEls.set(m.threadId, b);
         break;
       }
       case 'tool.call': {
         currentAssistant = null; // next deltas start a new assistant bubble
-        let args = m.args;
-        try { const a = JSON.parse(m.args); args = Object.entries(a).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v.slice(0, 400) : JSON.stringify(v).slice(0, 400))).join('\n'); } catch { }
-        const c = card('tool running', esc(m.name) + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : ''), args, true);
+        let args = m.args, parsed;
+        try { parsed = JSON.parse(m.args); args = Object.entries(parsed).map(([k, v]) => k + ': ' + (typeof v === 'string' ? v.slice(0, 400) : JSON.stringify(v).slice(0, 400))).join('\n'); } catch { }
+        const target = toolTarget(m.name, parsed);
+        const title = '<span class="verb">' + esc(toolVerb(m.name)) + '</span>' + (target ? '<span class="target">' + esc(target) + '</span>' : '') + (m.threadId && m.threadId !== 'main' ? ' <span class="badge">' + esc(m.threadId) + '</span>' : '');
+        const c = card('tool running', title, args, true);
+        c.querySelector('.title').title = m.name;
         toolCards.set(m.id, c);
         lastToolCardByName.set(m.name, c);
-        statusLine.textContent = 'running ' + m.name + '…';
+        statusLine.textContent = toolVerb(m.name) + (target ? ' ' + target : '') + '…';
         break;
       }
       case 'tool.result': {
@@ -203,64 +220,76 @@
           const b = c.querySelector('.body');
           b.textContent = (b.textContent ? b.textContent + '\n\n' : '') + '→ ' + m.text.slice(0, 4000) + (m.text.length > 4000 ? '\n… (' + m.text.length + ' chars)' : '');
           const t = c.querySelector('.title');
-          if (m.ms !== undefined && !t.querySelector('.ms')) { const s = el('span', 'badge ms', m.ms + ' ms'); t.appendChild(s); }
+          if (m.ms !== undefined && !t.querySelector('.ms')) { const s = el('span', 'badge ms', m.ms >= 1000 ? (m.ms / 1000).toFixed(1) + ' s' : m.ms + ' ms'); t.appendChild(s); }
           if (m.name === 'propose_edit') c.classList.add('review');
         }
-        if (running) statusLine.textContent = 'thinking…';
+        if (running) statusLine.textContent = 'Thinking…';
         break;
       }
       case 'context.pack': {
         const p = m.pack;
-        const c = card('context', 'Context pack — ' + p.chosen.length + ' files chosen, ' + p.usedTokens + '/' + p.budgetTokens + ' tokens, ' + p.candidatesConsidered + ' considered (' + p.tookMs + ' ms)', undefined, false);
+        const n = v => Number(v).toLocaleString('en-US');
+        const c = card('context', 'Context: ' + p.chosen.length + ' file' + (p.chosen.length === 1 ? '' : 's') + ' <span class="badge">' + n(p.usedTokens) + ' of ' + n(p.budgetTokens) + ' tokens</span>', undefined, false);
         const b = c.querySelector('.body');
         b.textContent = '';
-        const bar = el('div', 'bar'); const fill = el('span'); fill.style.width = Math.min(100, Math.round(100 * p.usedTokens / p.budgetTokens)) + '%'; bar.appendChild(fill); b.appendChild(bar);
-        p.chosen.forEach(f => {
-          const row = el('div', 'ctx-file');
+        b.appendChild(el('div', 'meta', 'Ranked from ' + n(p.candidatesConsidered) + ' candidates in ' + p.tookMs + ' ms'));
+        // One segment per chosen file, hottest (highest ranked) first, so the bar shows where the budget went.
+        const bar = el('div', 'heat'); bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', n(p.usedTokens) + ' of ' + n(p.budgetTokens) + ' tokens used');
+        const heat = i => Math.max(0.28, 1 - i * 0.14);
+        p.chosen.forEach((f, i) => { const seg = el('span'); seg.style.flexGrow = String(f.tokens); seg.style.opacity = String(heat(i)); seg.title = f.path + ': ' + n(f.tokens) + ' tokens'; bar.appendChild(seg); });
+        const free = el('span', 'free'); free.style.flexGrow = String(Math.max(0, p.budgetTokens - p.usedTokens)); bar.appendChild(free);
+        b.appendChild(bar);
+        p.chosen.forEach((f, i) => {
+          const row = el('div', 'ctx-file'); row.style.setProperty('--heat', String(heat(i)));
           const a = el('a', 'file', f.path); a.dataset.path = f.path; a.dataset.line = f.ranges && f.ranges[0] ? f.ranges[0].startLine : '';
           row.appendChild(a);
-          row.appendChild(el('span', 'why', f.reason + ' [' + f.mode + (f.ranges && f.ranges.length ? ': ' + f.ranges.map(r => (r.symbol ? r.symbol + ' ' : '') + 'L' + r.startLine + '-' + r.endLine).join(', ') : '') + ']'));
-          row.appendChild(el('span', 'tok', '~' + f.tokens + ' tok'));
+          row.appendChild(el('span', 'tok', n(f.tokens)));
+          const why = el('span', 'why', f.reason);
+          if (f.ranges && f.ranges.length) why.appendChild(el('span', 'ranges', f.ranges.map(r => (r.symbol ? r.symbol + ' ' : '') + 'L' + r.startLine + '–' + r.endLine).join(', ')));
+          row.appendChild(why);
           b.appendChild(row);
         });
         if (p.skipped && p.skipped.length) {
-          const sk = el('div', 'why', 'skipped: ' + p.skipped.slice(0, 8).map(s => s.path + ' (' + s.reason + ')').join(', '));
-          sk.style.marginTop = '6px'; sk.style.fontFamily = 'inherit';
-          b.appendChild(sk);
+          b.appendChild(el('div', 'skipped', 'Left out: ' + p.skipped.slice(0, 8).map(s => s.path + ' (' + s.reason + ')').join(', ')));
         }
         break;
       }
-      case 'review': { card('review', 'Review ' + esc(m.path), m.hunks + ' proposed hunk' + (m.hunks === 1 ? '' : 's') + ' · Accept or reject in the diff editor.', false); statusLine.textContent = 'waiting for your review of ' + m.path; break; }
+      case 'review': { card('review', 'Review <span class="target">' + esc(m.path) + '</span>', m.hunks + ' change' + (m.hunks === 1 ? '' : 's') + ' waiting in the diff editor. Accept or reject each one there.', false); statusLine.textContent = 'Waiting for your review of ' + m.path; break; }
       case 'approval': {
-        const c = card('approval', '⚠️ Run command?', (m.cwd ? '(in ' + m.cwd + ')\n' : '') + '$ ' + m.command, false);
+        const c = card('approval', 'Run this command?' + (m.cwd && m.cwd !== '.' ? ' <span class="badge">in ' + esc(m.cwd) + '</span>' : ''), undefined, false);
+        const b = c.querySelector('.body'); b.classList.remove('prose'); b.classList.add('command'); b.textContent = m.command;
         const row = el('div', 'row');
-        const ok = el('button', 'primary', 'Allow'); const no = el('button', 'danger', 'Deny');
+        const ok = el('button', 'primary', 'Allow'); const no = el('button', '', 'Deny');
         ok.addEventListener('click', () => { ok.disabled = true; no.disabled = true; vscode.postMessage({ type: 'approve', id: m.id, allow: true }); });
         no.addEventListener('click', () => { ok.disabled = true; no.disabled = true; vscode.postMessage({ type: 'approve', id: m.id, allow: false }); });
         row.appendChild(ok); row.appendChild(no); c.appendChild(row); c.dataset.id = m.id;
-        statusLine.textContent = 'waiting for approval…';
+        statusLine.textContent = 'Waiting for your approval';
         break;
       }
       case 'approval.resolved': {
         const c = [...log.querySelectorAll('.card.approval')].find(x => x.dataset.id === m.id);
-        if (c) { const row = c.querySelector('.row'); if (row) row.replaceWith(el('div', 'why', m.allow ? '✓ allowed' : '✗ denied')); }
+        if (c) { const row = c.querySelector('.row'); if (row) row.replaceWith(el('div', 'resolved ' + (m.allow ? 'yes' : 'no'), m.allow ? 'Allowed' : 'Denied')); }
         break;
       }
       case 'question': {
-        const c = card('question', '❓ ' + esc(m.question), undefined, false);
+        const c = card('question', esc(m.question), undefined, false);
         const row = el('div', 'row'); row.style.flexWrap = 'wrap';
-        (m.options || []).forEach(o => { const b = el('button', '', o); b.addEventListener('click', () => { vscode.postMessage({ type: 'answer', id: m.id, answer: o }); row.replaceWith(el('div', 'why', '→ ' + o)); }); row.appendChild(b); });
-        const free = el('input'); free.placeholder = 'or type an answer and press Enter'; free.style.flex = '1';
-        free.addEventListener('keydown', e => { if (e.key === 'Enter') { vscode.postMessage({ type: 'answer', id: m.id, answer: free.value }); row.replaceWith(el('div', 'why', '→ ' + free.value)); } });
+        (m.options || []).forEach(o => { const b = el('button', '', o); b.addEventListener('click', () => { vscode.postMessage({ type: 'answer', id: m.id, answer: o }); row.replaceWith(el('div', 'resolved', o)); }); row.appendChild(b); });
+        const free = el('input'); free.placeholder = 'Or type an answer and press Enter'; free.style.flex = '1';
+        free.addEventListener('keydown', e => { if (e.key === 'Enter') { vscode.postMessage({ type: 'answer', id: m.id, answer: free.value }); row.replaceWith(el('div', 'resolved', free.value)); } });
         row.appendChild(free); c.appendChild(row);
         break;
       }
-      case 'notice': card('notice ' + m.level, (m.level === 'error' ? '⛔ ' : m.level === 'warn' ? '⚠️ ' : 'ℹ️ ') + esc(m.text), undefined, true); break;
-      case 'compaction': card('notice info', m.phase === 'started' ? '🗜 TrueForge is compacting the session context…' : '🗜 Context compacted', undefined, true); break;
+      case 'notice': card('notice ' + m.level, esc(m.text), undefined, true); break;
+      case 'compaction': card('notice info', m.phase === 'started' ? 'TrueForge is compacting the session context…' : 'Session context compacted', undefined, true); break;
       case 'turn.done': {
         finishTools();
-        log.querySelectorAll('.card.question .row').forEach(row => row.replaceWith(el('div', 'why', 'No longer awaiting a response')));
-        const t = el('div', 'turn-done', (m.status === 'done' ? '✓ done' : m.status === 'cancelled' ? '■ cancelled' : '✗ ' + (m.message || 'error')) + (m.model ? ' · ' + m.model : '') + (m.usedFallback ? ' (fallback)' : '') + (m.attempts > 1 ? ' · ' + m.attempts + ' attempts' : ''));
+        log.querySelectorAll('.card.question .row').forEach(row => row.replaceWith(el('div', 'resolved', 'No longer waiting for an answer')));
+        const t = el('div', 'turn-done ' + (m.status === 'done' ? 'ok' : m.status === 'cancelled' ? 'cancelled' : 'failed'));
+        if (m.status === 'done') { const sp = el('span', 'spark'); sp.innerHTML = SPARK; t.appendChild(sp); }
+        t.appendChild(el('strong', '', m.status === 'done' ? 'Done' : m.status === 'cancelled' ? 'Cancelled' : 'Failed' + (m.message ? ': ' + m.message : '')));
+        const meta = [m.model ? m.model.split('/').pop() + (m.usedFallback ? ' (fallback)' : '') : '', m.attempts > 1 ? m.attempts + ' attempts' : ''].filter(Boolean);
+        if (meta.length) { const s = el('span', '', meta.join(', ')); if (m.model) s.title = m.model; t.appendChild(s); }
         log.appendChild(t);
         setRunning(false, m.status === 'done' ? 'Ready' : m.status === 'cancelled' ? 'Cancelled · accepted edits remain applied' : m.message || 'Turn failed');
         scroll();

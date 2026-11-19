@@ -128,7 +128,7 @@ export class AgentPanel implements vscode.WebviewViewProvider {
 <body>
 <div id="app">
   <header id="status">
-    <div class="brand"><strong>Anvil</strong><span>Workspace agent</span><button id="newChat" class="icon" aria-label="New chat" title="New chat">＋</button></div>
+    <div class="brand"><svg class="mark" viewBox="36 4 158 106" aria-hidden="true" focusable="false"><g stroke="var(--forge-ink)" stroke-linejoin="round" stroke-width="3"><path fill="var(--forge-mid)" d="m41 46 48 6 22-10 57 0-5 11-26 11-7 13 25 6-39 16-47-13 18-8 4-12-6-7-23-2z"/><path fill="var(--forge-face)" d="m41 46 45-21 35 1 16-7 53 4-22 19-57 0-22 10z"/></g><g stroke="var(--forge-accent)" stroke-width="5" stroke-linecap="square"><path d="m112 17-2-9m11 7 5-9m2 16 9-5"/></g></svg><strong>Anvil</strong><span>Workspace agent</span><button id="newChat" class="icon" aria-label="New chat" title="New chat">＋</button></div>
     <div class="connection"><button id="modelChip" class="chip" title="Select a model">Choose model</button><span id="tfChip" class="chip">Connecting…</span><button id="sessionChip" class="chip hidden" title="Open this session in TrueForge">Session ↗</button></div>
   </header>
   <main id="log" aria-label="Conversation">

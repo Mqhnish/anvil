@@ -18,16 +18,8 @@ main#log { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-directio
 .card .title .badge { font-weight: normal; opacity: 0.7; margin-left: auto; font-size: 11px; }
 .card .body { margin-top: 6px; white-space: pre-wrap; font-family: var(--vscode-editor-font-family); font-size: 11px; max-height: 260px; overflow: auto; opacity: 0.9; }
 .card.collapsed .body { display: none; }
-.card.tool { border-left: 3px solid var(--vscode-charts-blue); }
-.card.tool.running .title::after { content: '…'; animation: blink 1s infinite; }
-.card.context { border-left: 3px solid var(--vscode-charts-purple); }
-.card.review { border-left: 3px solid var(--vscode-charts-orange); }
-.card.approval { border-left: 3px solid var(--vscode-charts-red); }
-.card.question { border-left: 3px solid var(--vscode-charts-yellow); }
-.card.thread { border-left: 3px solid var(--vscode-charts-green); opacity: 0.9; }
-.card.notice.warn { border-left: 3px solid var(--vscode-charts-orange); }
-.card.notice.error { border-left: 3px solid var(--vscode-charts-red); }
-.card.notice.info { border-left: 3px solid var(--vscode-charts-blue); }
+.card.review:not(.tool), .card.approval, .card.question { border-left: 3px solid var(--forge-accent); }
+.card.notice.error { border-left: 3px solid var(--vscode-errorForeground); }
 .ctx-file { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; padding: 2px 0; border-top: 1px dashed var(--vscode-panel-border); align-items: baseline; }
 .ctx-file a { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; font-family: var(--vscode-editor-font-family); }
 .ctx-file .why { opacity: 0.8; }
@@ -41,7 +33,6 @@ button.danger { background: var(--vscode-inputValidation-errorBackground); color
 button:disabled { opacity: 0.5; cursor: default; }
 footer { border-top: 1px solid var(--vscode-panel-border); padding: 6px 8px; }
 #statusLine { font-size: 11px; opacity: 0.8; min-height: 14px; margin-bottom: 4px; }
-#statusLine.running::before { content: '● '; color: var(--vscode-charts-green); animation: blink 1.2s infinite; }
 textarea#input { width: 100%; resize: vertical; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 6px; font-family: inherit; }
 .hint { font-size: 11px; opacity: 0.6; margin-left: auto; }
 .hidden { display: none !important; }
@@ -49,7 +40,6 @@ textarea#input { width: 100%; resize: vertical; background: var(--vscode-input-b
 #mentions div { padding: 3px 8px; cursor: pointer; display: flex; gap: 8px; }
 #mentions div.sel, #mentions div:hover { background: var(--vscode-editorSuggestWidget-selectedBackground); }
 #mentions .d { opacity: 0.6; margin-left: auto; }
-.turn-done { font-size: 11px; opacity: 0.7; text-align: center; }
 @keyframes blink { 50% { opacity: 0.2; } }
 /* Native theme tokens keep the panel legible in dark, light and high-contrast themes. */
 #app { min-width: 0; position: relative; }
@@ -125,5 +115,110 @@ textarea#input { min-height: 72px; max-height: 180px; line-height: 1.5; padding:
 .composer .row { padding: 0 5px 5px; margin-top: 2px; }
 #send { background: var(--forge-accent); color: #22170f; font-weight: 650; }
 .vscode-light #send, .vscode-high-contrast-light #send { color: white; }
-.card.review { border-left-color: var(--forge-accent); background: color-mix(in srgb, var(--forge-accent) 6%, var(--vscode-editorWidget-background)); }
+.card.review:not(.tool) { border-left-color: var(--forge-accent); background: color-mix(in srgb, var(--forge-accent) 6%, var(--vscode-editorWidget-background)); }
 @media (max-height: 460px) { .forge-print { display: none; } .welcome h1 { margin-top: 0; } }
+
+/* Activity log. Tool calls are steps on a thin rail, not boxes: an agent run can make dozens of them, and only
+   the cards that need the user (review, approval, question, errors) get a border and the accent colour. */
+#app {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --rail: color-mix(in srgb, var(--vscode-foreground) 16%, transparent);
+}
+.card.tool, .card.thread, .card.notice:not(.error) { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.card.tool + .card.tool, .card.tool + .card.thread, .card.thread + .card.tool { margin-top: -10px; }
+.card.tool > button.title, .card.thread > button.title, .card.notice:not(.error) > button.title {
+  position: relative; display: flex; align-items: baseline; gap: 6px; padding: 3px 0 3px 16px; font-weight: 400; min-height: 22px;
+}
+.card.tool > button.title::before, .card.thread > button.title::before, .card.notice:not(.error) > button.title::before {
+  content: ''; position: absolute; left: 3px; top: 9px; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--vscode-descriptionForeground); transform: none;
+}
+.card.tool + .card.tool > button.title::after, .card.thread + .card.tool > button.title::after, .card.tool + .card.thread > button.title::after {
+  content: ''; position: absolute; left: 5px; top: -6px; height: 14px; width: 1px; background: var(--rail);
+}
+.card.tool.running > button.title::before { background: var(--forge-accent); animation: pulse 1.2s ease-in-out infinite; }
+.card.notice.warn > button.title::before { background: var(--vscode-charts-orange); }
+.card.tool .verb { font-weight: 600; white-space: nowrap; }
+.target { font-family: var(--forge-mono); font-size: 10.5px; color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.card.review:not(.tool) > button.title .target { color: inherit; font-size: inherit; font-weight: 600; }
+.card .title .badge { flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--vscode-descriptionForeground); opacity: 1; }
+.card.tool > .body, .card.thread > .body { margin: 2px 0 6px 16px; padding: 8px 10px; border-left: 1px solid var(--rail); background: var(--vscode-textCodeBlock-background); border-radius: 0 3px 3px 0; }
+.card.tool > button.title:hover .verb { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Cards that carry prose use the UI font; the code font is for paths, commands and tool output. */
+.card > .body.prose { font-family: var(--vscode-font-family); font-size: 12px; line-height: 1.5; opacity: 1; color: var(--vscode-descriptionForeground); }
+.card > .body.command { font-family: var(--forge-mono); font-size: 11px; margin: 0 10px 2px; padding: 8px 10px; background: var(--vscode-textCodeBlock-background); border-radius: 3px; opacity: 1; }
+.card > .body.command::before { content: '$ '; color: var(--vscode-descriptionForeground); }
+.card.approval > .row { padding-top: 8px; }
+.resolved { padding: 0 10px 10px; font-size: 11px; color: var(--vscode-descriptionForeground); }
+.resolved.yes::before { content: '✓ '; color: var(--vscode-testing-iconPassed); }
+.resolved.no::before { content: '✕ '; color: var(--vscode-errorForeground); }
+
+/* Context pack */
+.card.context > .body { max-height: 340px; }
+.card.context .meta { font-family: var(--vscode-font-family); font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
+.card.context .bar > span { background: var(--forge-accent); }
+.ctx-file .tok { color: var(--vscode-descriptionForeground); opacity: 1; font-size: 10px; }
+.ctx-file .why { color: var(--vscode-descriptionForeground); opacity: 1; }
+.ctx-file .ranges { display: block; font-family: var(--forge-mono); font-size: 10px; margin-top: 1px; }
+.card.context .skipped { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--vscode-panel-border); font-family: var(--vscode-font-family); font-size: 11px; color: var(--vscode-descriptionForeground); }
+
+/* End of a turn: a quiet divider with the outcome first. */
+.turn-done { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--vscode-descriptionForeground); }
+.turn-done::after { content: ''; flex: 1; height: 1px; background: var(--vscode-panel-border); }
+.turn-done strong { font-weight: 600; color: var(--vscode-foreground); }
+.turn-done.failed strong { color: var(--vscode-errorForeground); }
+#statusLine.running::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--forge-accent); animation: pulse 1.2s ease-in-out infinite; }
+#mentions .label[data-kind="file"]::before { content: '▤ '; opacity: .6; }
+#mentions .label[data-kind="symbol"]::before { content: 'ƒ '; opacity: .6; }
+
+/* Motion: new log entries settle in, the expand chevron turns, buttons answer the press. Kept short (≤180ms)
+   because the log updates many times a turn; nothing animates on keyboard shortcuts or streamed text. */
+@keyframes pulse { 50% { opacity: .35; } }
+main#log > .card, main#log > .msg.user, main#log > .turn-done {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+  @starting-style { opacity: 0; transform: translateY(4px); }
+}
+.card:not(.tool):not(.thread):not(.notice) > button.title::before, .card.notice.error > button.title::before { content: '▸'; display: inline-block; transition: transform 150ms var(--ease-out); transform: rotate(90deg); }
+.card.collapsed:not(.tool):not(.thread):not(.notice) > button.title::before, .card.notice.error.collapsed > button.title::before { transform: none; }
+button:not(.title):not(.example):active:not(:disabled) { transform: scale(0.97); }
+button:not(.title):not(.example) { transition: transform 120ms var(--ease-out), filter 120ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  main#log > .card, main#log > .msg.user, main#log > .turn-done { transition: opacity 120ms ease; @starting-style { opacity: 0; transform: none; } }
+  button:not(.title):not(.example):active:not(:disabled) { transform: none; }
+}
+
+/* Forge identity in the working view. */
+.brand .mark { width: 30px; height: 20px; flex-shrink: 0; margin-right: -2px; }
+.brand strong { color: var(--vscode-foreground); }
+
+/* Steps are struck hot and cool down: the running step glows like an ember, then fades to grey when its result
+   arrives. The slower 450ms cool-down is the state change itself, so it never delays anything. */
+.card.tool > button.title::before { transition: background-color 450ms var(--ease-out), box-shadow 450ms var(--ease-out); }
+.card.tool.running > button.title::before {
+  background: var(--forge-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--forge-accent) 22%, transparent), 0 0 10px 1px color-mix(in srgb, var(--forge-accent) 55%, transparent);
+}
+.card.tool.running .verb { color: var(--forge-accent); }
+.card.tool .verb { transition: color 450ms var(--ease-out); }
+
+/* Cards that wait on you carry the dotted forge-plate texture from the welcome art. */
+.card.review:not(.tool), .card.approval, .card.question {
+  background-color: color-mix(in srgb, var(--forge-accent) 5%, var(--vscode-editorWidget-background));
+  background-image: radial-gradient(color-mix(in srgb, var(--forge-accent) 16%, transparent) .8px, transparent 1px);
+  background-size: 10px 10px; background-position: -3px -3px;
+}
+.card.review:not(.tool) > button.title, .card.approval > button.title, .card.question > button.title { font-size: 12px; }
+
+/* Context heat bar: one segment per file, hottest first; the empty tail is unused budget. */
+.heat { display: flex; gap: 2px; height: 8px; margin: 0 0 10px; }
+.heat > span { min-width: 3px; background: var(--forge-accent); border-radius: 1px; }
+.heat > span.free { opacity: 1 !important; background: repeating-linear-gradient(135deg, var(--vscode-panel-border) 0 2px, transparent 2px 5px); }
+.ctx-file { position: relative; padding-left: 10px; }
+.ctx-file::before { content: ''; position: absolute; left: 0; top: 11px; bottom: 9px; width: 2px; border-radius: 1px; background: var(--forge-accent); opacity: var(--heat, 1); }
+
+/* A finished turn ends with the anvil's spark instead of a generic tick. */
+.turn-done .spark { display: inline-flex; width: 18px; height: 10px; color: var(--forge-accent); }
+.turn-done .spark svg { width: 100%; height: 100%; }
+.turn-done.ok strong { color: var(--forge-accent); }
+@media (prefers-reduced-motion: reduce) { .card.tool > button.title::before, .card.tool .verb { transition: none; } }
