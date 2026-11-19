@@ -206,6 +206,16 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('anvil.openPanel', () => panel.reveal()),
+    vscode.commands.registerCommand('anvil.runTask', async (task?: string) => {
+      const text = typeof task === 'string' ? task : await vscode.window.showInputBox({ title: 'Anvil workspace task', prompt: 'What would you like to change?', ignoreFocusOut: true });
+      if (text?.trim()) { panel.reveal(); await sendMessage(text); }
+    }),
+    vscode.commands.registerCommand('anvil.newChat', () => {
+      if (svc.runner.isRunning) { vscode.window.showInformationMessage('Anvil: finish or cancel the current task before starting a new chat.'); return; }
+      svc.runner.resetSession();
+      panel.post({ type: 'reset' });
+      panel.status('Ready when you are');
+    }),
     vscode.commands.registerCommand('anvil.openSettings', () => vscode.commands.executeCommand('workbench.action.openSettings', 'anvil')),
     vscode.commands.registerCommand('anvil.cancel', () => cancelTurn()),
     vscode.commands.registerCommand('anvil.inlineEdit', async () => {

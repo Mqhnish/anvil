@@ -48,11 +48,11 @@ Evidence status below distinguishes implementation checks from the required reco
 
 | Criterion | Verified evidence | Still required |
 |---|---|---|
-| A1 Inline edit | Shortcut, native diff, accept/reject and undo exercised in VS Code | Exact Task A; individual hunk controls; timestamp |
+| A1 Inline edit | Shortcut/native diff smoke check; per-hunk commands in real VS Code tests | Exact Task A and recorded timestamp |
 | A2 Agent mode | TrueForge/MCP tool loop exercised headlessly | Real-model Task B: discover and edit at least three files |
-| A3 Streaming and cancellation | Streaming and cancellation regression/e2e checks pass | Reliable interactive cancellation on video |
+| A3 Streaming and cancellation | Streaming/e2e checks; actual Extension Host review cancellation passes | Record responsive cancellation on video |
 | B1 Context assembly | Retrieval tests and budget/reason card implemented | Show selection and reasons during Task B |
-| B2 Diff safety | Baseline protection and undo tests; interactive accept/reject/undo | Individual accepted/rejected hunks on video |
+| B2 Diff safety | Baseline protection; actual per-hunk accept/reject and WorkspaceEdit undo | Show individual accepted/rejected hunks on video |
 | B3 Resilience | Dead primary, retry, fallback, and no-fallback e2e cases pass | Repeat with a real fallback model |
 | B4 TrueForge depth | Agent spec, MCP registration and approval loop exercised | Show the TrueForge session and explain configured features |
 | C1 Video | Rehearsal script prepared | Record a legible video within the required limit |
@@ -64,6 +64,6 @@ TypeScript and esbuild; TrueForge SDK and local server; MCP SDK; VS Code extensi
 
 ## 8. Known limitations and next steps
 
-The automated suite and headless e2e verify extension behavior with scripted responses. Interactive smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, accept/reject and undo. Full real-model Tasks A/B/C, reliable UI cancellation, and individual per-hunk CodeLens actions remain to be demonstrated.
+The automated suite and headless e2e verify extension behavior with scripted responses. Interactive smoke checks cover the panel and macOS inline shortcut. Five actual VS Code Extension Host scenarios now pass: individual CodeLens accept/reject with partial application, undo, review cancellation, a subsequent task, and closing a diff. Those tests invoke the real editor commands; full real-model Tasks A/B/C and the recorded demonstration remain pending.
 
 Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.

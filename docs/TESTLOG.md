@@ -85,3 +85,26 @@ provider was configured in this environment, so full real-model Tasks A/B/C and 
 - The 3-page review-draft PDF was exported from the eight-section write-up and visually checked. Its pending live-model/video evidence is explicit. The export source and submission checklist are in the repository; generated PDFs and VSIX files remain local artifacts.
 
 The packaging CLI is pinned. Its minimatch dependency is overridden to the patched 11.0.1 release; packaging and clean-install checks exercised that combination. No new runtime dependency was introduced. Anvil now declares trusted local workspace requirements and enables diff CodeLens by default (explicit user configuration still takes precedence).
+
+
+## Actual Extension Host regression run - 19 November 2026
+
+`ANVIL_TEST_TRUEFORGE_URL=http://127.0.0.1:18790 npm run test:editor` passed five scenarios using the installed VS Code
+1.143.1, TrueForge 0.185.1 and a local scripted multi-hunk provider. The tests run inside the real Extension Host
+with a disposable workspace/profile, without the mocked vscode module:
+
+1. Execute the first hunk's CodeLens accept action and the second hunk's reject action, finish review, and verify only the accepted hunk reaches disk.
+2. Invoke Anvil undo and compare the restored file byte-for-byte with its baseline.
+3. Cancel a task while its native diff review is pending; verify the task returns, the diff closes and the file remains unchanged.
+4. Start a fresh task after cancellation and reject all hunks; verify the task completes and the file remains unchanged.
+5. Close the native diff tab; verify it rejects the pending edit without hanging.
+
+CodeLens actions are invoked through the same registered commands they expose in the editor. This verifies actual
+editor behavior, not physical pointer interaction or real-model reasoning. The separate five-scenario headless suite
+also passes after switching its mock endpoints to dynamically assigned ports and per-run provider names. Server
+readiness is now explicit and providers/processes are cleaned up in finally blocks rather than reusing fixed ports.
+
+GitHub metadata and the official competition page were checked on 19 November. The repository is still private;
+visibility was not changed. The official deadline is 20 November 2026, 23:59 IST (21 November, 02:29 Singapore).
+Source: https://techfest.org/competitions/forge-a-thon. Real-model credentials, exact Tasks A/B/C, video evidence,
+final write-up evidence fields, repository visibility and submission remain open.

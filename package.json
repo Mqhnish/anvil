@@ -106,6 +106,16 @@
         "command": "anvil.openSettings",
         "title": "Open Settings",
         "category": "Anvil"
+      },
+      {
+        "command": "anvil.runTask",
+        "title": "Run Workspace Task",
+        "category": "Anvil"
+      },
+      {
+        "command": "anvil.newChat",
+        "title": "New Chat",
+        "category": "Anvil"
       }
     ],
     "keybindings": [
@@ -252,7 +262,8 @@
     "e2e": "node dist/e2e.js --root ../flask",
     "mock-model": "node scripts/mock-model.mjs",
     "check": "npm run typecheck && npm test && npm run build",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "npm run build",
+    "test:editor": "npm run build && node scripts/test-editor.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

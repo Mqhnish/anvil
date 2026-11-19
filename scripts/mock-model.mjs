@@ -15,13 +15,14 @@
  * Policy (per conversation): if a tool result from assemble_context is absent → call assemble_context with the
  * user task; then read_file on the first chosen file; then propose_edit appending a comment to that file;
  * then finish with a summary. In inline mode (user text starts with INLINE EDIT) it calls propose_edit with the
- * selected block upper-cased in its first line.
+ * selected block annotated on its first line. The optional --multi-hunk mode annotates two distant lines for editor tests.
  */
 import http from 'node:http';
 
 const arg = (n, d) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const port = Number(arg('--port', '8999'));
 const fail = arg('--fail', '');
+const multiHunk = process.argv.includes('--multi-hunk');
 
 function toolCall(name, args) {
   return { id: 'call_' + Math.random().toString(36).slice(2, 10), type: 'function', function: { name, arguments: JSON.stringify(args) } };
@@ -59,12 +60,17 @@ function policy(messages, tools) {
   const packMsg = toolMsgs.find(m => String(m.content).startsWith('Context pack'));
   const firstFile = packMsg ? (String(packMsg.content).match(/^1\. (\S+)/m) || [])[1] : undefined;
   if (firstFile && !calledNames.includes('read_file') && !lastToolText.startsWith(firstFile)) {
-    return { content: `I will edit ${firstFile} (chosen by the context pack because it ranked first).`, tool_calls: [via('read_file', { path: firstFile, start_line: 1, end_line: 5 })] };
+    return { content: `I will edit ${firstFile} (chosen by the context pack because it ranked first).`, tool_calls: [via('read_file', { path: firstFile, start_line: 1, end_line: multiHunk ? 100 : 5 })] };
   }
   const proposed = calledNames.includes('propose_edit') || messages.some(m => m.role === 'assistant' && JSON.stringify(m).includes('"propose_edit"'));
   if (firstFile && !proposed) {
     const firstLine = (lastToolText.split('\n')[1] || '').replace(/^\s*\d+\| /, '');
-    return { tool_calls: [via('propose_edit', { path: firstFile, summary: 'mock change: annotate first line', edits: [{ old: firstLine, new: firstLine + '  # touched by mock-coder' }] })] };
+    const edits = [{ old: firstLine, new: firstLine + '  # touched by mock-coder' }];
+    if (multiHunk) {
+      const lastLine = lastToolText.split('\n').slice(1).map(line => line.replace(/^\s*\d+\| ?/, '')).filter(line => line.trim()).at(-1);
+      if (lastLine && lastLine !== firstLine) edits.push({ old: lastLine, new: lastLine + '  # second hunk' });
+    }
+    return { tool_calls: [via('propose_edit', { path: firstFile, summary: 'scripted editor regression edit', edits })] };
   }
   return { content: `Finished. ${lastToolText.split('\n')[0]}` };
 }
@@ -105,4 +111,4 @@ const server = http.createServer((req, res) => {
     }
   });
 });
-server.listen(port, '127.0.0.1', () => console.log(JSON.stringify({ listening: `http://127.0.0.1:${port}/v1`, model: 'mock-coder', fail: fail || null })));
+server.listen(port, '127.0.0.1', () => console.log(JSON.stringify({ listening: `http://127.0.0.1:${server.address().port}/v1`, model: 'mock-coder', fail: fail || null })));

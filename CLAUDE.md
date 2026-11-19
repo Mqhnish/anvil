@@ -40,7 +40,7 @@ Always run `npm run typecheck && npm test` before committing; run `npm run e2e` 
 
 ## Current state (19 Nov 2026)
 Working and verified headlessly: TrueForge session/turn streaming, MCP registration + tool calls, approval-driven
-per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 63 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Individual CodeLens actions, UI cancellation, and complete real-model Tasks A/B/C remain unverified. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
+per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 63 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Five actual VS Code Extension Host scenarios now verify per-hunk commands, undo, review cancellation, recovery and diff closing via `npm run test:editor`. Complete real-model Tasks A/B/C and the recording remain pending. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
 
 ## Open work, in priority order
 1. Run Tasks A, B, C for real in VS Code with a real model; fix whatever breaks (reviewer, panel, prompt wording in

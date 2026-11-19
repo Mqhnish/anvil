@@ -29,13 +29,30 @@ import { createClient, registerWorkspaceMcp, ping, describeError } from '../true
 const arg = (n: string, d?: string) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const TF = arg('--trueforge', 'http://localhost:8790')!;
 const ROOT = path.resolve(arg('--root', '../flask')!);
-const MOCK_OK = 8999, MOCK_DEAD = 8998;
+const RUN_ID = 'e2e-' + Math.random().toString(36).slice(2, 10);
+const PROVIDER_OK = RUN_ID + '-mock', PROVIDER_DEAD = RUN_ID + '-dead';
+const MODEL_OK = PROVIDER_OK + '/mock-coder', MODEL_DEAD = PROVIDER_DEAD + '/mock-coder';
 const SCRIPTS = path.resolve(__dirname, '..', 'scripts');
 
-function startMock(port: number, fail?: string): ChildProcess {
-  const p = spawn(process.execPath, [path.join(SCRIPTS, 'mock-model.mjs'), '--port', String(port), ...(fail ? ['--fail', fail] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
-  p.stdout?.on('data', d => process.stderr.write(`[mock:${port}] ${d}`));
-  return p;
+async function startMock(fail?: string): Promise<{ proc: ChildProcess; port: number }> {
+  const proc = spawn(process.execPath, [path.join(SCRIPTS, 'mock-model.mjs'), '--port', '0', ...(fail ? ['--fail', fail] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
+  return new Promise((resolve, reject) => {
+    let output = '';
+    const timer = setTimeout(() => { proc.kill(); reject(new Error('Mock model did not become ready')); }, 5000);
+    proc.once('error', error => { clearTimeout(timer); reject(error); });
+    proc.once('exit', code => { clearTimeout(timer); reject(new Error(`Mock model exited before readiness (${code})`)); });
+    proc.stdout!.on('data', chunk => {
+      output += chunk;
+      if (!output.includes('\n')) return;
+      try {
+        const ready = JSON.parse(output.split('\n')[0]);
+        const port = Number(new URL(ready.listening).port);
+        if (!Number.isInteger(port) || port <= 0) throw new Error('Invalid mock server port');
+        clearTimeout(timer);
+        resolve({ proc, port });
+      } catch (error) { clearTimeout(timer); proc.kill(); reject(error); }
+    });
+  });
 }
 
 async function registerProvider(name: string, port: number): Promise<void> {
@@ -59,28 +76,34 @@ async function main(): Promise<void> {
   const conn = createClient(TF);
   const p = await ping(conn);
   if (!p.ok) { console.error(p.message); process.exit(2); }
-  const procs = [startMock(MOCK_OK), startMock(MOCK_DEAD, '503')];
-  await new Promise(r => setTimeout(r, 600));
-  await registerProvider('mock', MOCK_OK);
-  await registerProvider('dead', MOCK_DEAD);
+  const procs: ChildProcess[] = [];
+  try {
+    const ok = await startMock(); procs.push(ok.proc);
+    const dead = await startMock('503'); procs.push(dead.proc);
+    await registerProvider(PROVIDER_OK, ok.port);
+    await registerProvider(PROVIDER_DEAD, dead.port);
 
-  const scenarios: Scenario[] = [
-    { name: 'agent turn edits a file after approval + review', run: () => scenarioAgent('accept-all', true) },
-    { name: 'rejecting every hunk leaves the file untouched', run: () => scenarioAgent('reject-all', false) },
-    { name: 'resilience: dead primary → retries → automatic fallback', run: () => scenarioResilience(true) },
-    { name: 'resilience: dead primary, no fallback → clear error, workspace unchanged', run: () => scenarioResilience(false) },
-    { name: 'cancellation mid-turn leaves workspace unchanged', run: scenarioCancel },
-  ];
-  for (const s of scenarios) {
-    const t0 = Date.now();
-    try { await s.run(); results.push({ name: s.name, ok: true, detail: '', ms: Date.now() - t0 }); }
-    catch (e) { results.push({ name: s.name, ok: false, detail: describeError(e), ms: Date.now() - t0 }); }
-    console.error(`${results[results.length - 1].ok ? 'PASS' : 'FAIL'}  ${s.name}  (${Date.now() - t0}ms) ${results[results.length - 1].detail}`);
+    const scenarios: Scenario[] = [
+      { name: 'agent turn edits a file after approval + review', run: () => scenarioAgent('accept-all', true) },
+      { name: 'rejecting every hunk leaves the file untouched', run: () => scenarioAgent('reject-all', false) },
+      { name: 'resilience: dead primary → retries → automatic fallback', run: () => scenarioResilience(true) },
+      { name: 'resilience: dead primary, no fallback → clear error, workspace unchanged', run: () => scenarioResilience(false) },
+      { name: 'cancellation mid-turn leaves workspace unchanged', run: scenarioCancel },
+    ];
+    for (const s of scenarios) {
+      const t0 = Date.now();
+      try { await s.run(); results.push({ name: s.name, ok: true, detail: '', ms: Date.now() - t0 }); }
+      catch (e) { results.push({ name: s.name, ok: false, detail: describeError(e), ms: Date.now() - t0 }); }
+      console.error(`${results[results.length - 1].ok ? 'PASS' : 'FAIL'}  ${s.name}  (${Date.now() - t0}ms) ${results[results.length - 1].detail}`);
+    }
+    const failed = results.filter(r => !r.ok).length;
+    console.log(JSON.stringify({ passed: results.length - failed, failed, results }, null, 2));
+    process.exitCode = failed ? 1 : 0;
+  } finally {
+    for (const proc of procs) proc.kill();
+    await conn.client.settings.modelProviders.delete(PROVIDER_OK).catch(() => {});
+    await conn.client.settings.modelProviders.delete(PROVIDER_DEAD).catch(() => {});
   }
-  for (const pr of procs) pr.kill();
-  const failed = results.filter(r => !r.ok).length;
-  console.log(JSON.stringify({ passed: results.length - failed, failed, results }, null, 2));
-  process.exit(failed ? 1 : 0);
 }
 
 async function setup(policy: 'accept-all' | 'reject-all', primary: string, fallback?: string) {
@@ -90,11 +113,18 @@ async function setup(policy: 'accept-all' | 'reject-all', primary: string, fallb
   const decisions = new DecisionStore();
   const toolCalls: string[] = [];
   const mcp = new WorkspaceMcpServer({ host, index, decisions, budgetTokens: () => 8000, events: { onToolCall: n => toolCalls.push(n) } });
-  await index.ensure();
-  await mcp.start();
   const conn = createClient(TF);
   const serverName = 'anvil-e2e-' + Math.random().toString(36).slice(2, 7);
-  await registerWorkspaceMcp(conn, serverName, mcp.url, mcp.secret);
+  try {
+    await index.ensure();
+    await mcp.start();
+    await registerWorkspaceMcp(conn, serverName, mcp.url, mcp.secret);
+  } catch (error) {
+    await mcp.stop();
+    await conn.client.settings.mcpServers.delete(serverName).catch(() => {});
+    fs.rmSync(repo, { recursive: true, force: true });
+    throw error;
+  }
   const notices: string[] = [];
   const statuses: string[] = [];
   const runner = new TurnRunner({
@@ -109,7 +139,7 @@ async function setup(policy: 'accept-all' | 'reject-all', primary: string, fallb
 const TASK = 'Add a note comment to the top of src/flask/helpers.py explaining what the module is for.';
 
 async function scenarioAgent(policy: 'accept-all' | 'reject-all', expectChange: boolean): Promise<void> {
-  const s = await setup(policy, 'mock/mock-coder');
+  const s = await setup(policy, MODEL_OK);
   try {
     const target = path.join(s.repo, 'src/flask/helpers.py');
     const before = fs.readFileSync(target, 'utf8');
@@ -130,7 +160,7 @@ async function scenarioAgent(policy: 'accept-all' | 'reject-all', expectChange: 
 }
 
 async function scenarioResilience(withFallback: boolean): Promise<void> {
-  const s = await setup('accept-all', 'dead/mock-coder', withFallback ? 'mock/mock-coder' : undefined);
+  const s = await setup('accept-all', MODEL_DEAD, withFallback ? MODEL_OK : undefined);
   try {
     const target = path.join(s.repo, 'src/flask/helpers.py');
     const before = fs.readFileSync(target, 'utf8');
@@ -138,13 +168,13 @@ async function scenarioResilience(withFallback: boolean): Promise<void> {
     const after = fs.readFileSync(target, 'utf8');
     if (withFallback) {
       if (r.status !== 'done') throw new Error(`expected done via fallback, got ${r.status}: ${r.message}`);
-      if (!r.usedFallback || r.modelUsed !== 'mock/mock-coder') throw new Error('fallback was not used: ' + JSON.stringify({ usedFallback: r.usedFallback, model: r.modelUsed }));
+      if (!r.usedFallback || r.modelUsed !== MODEL_OK) throw new Error('fallback was not used: ' + JSON.stringify({ usedFallback: r.usedFallback, model: r.modelUsed }));
       if (!s.notices.some(n => n.startsWith('warn') && /Falling back/.test(n))) throw new Error('no fallback notice: ' + s.notices.join(' | '));
       if (!s.statuses.some(t => /retry 1\/1/.test(t))) throw new Error('no retry with backoff observed: ' + s.statuses.join(' | '));
       if (after === before) throw new Error('fallback model did not edit the file');
     } else {
       if (r.status !== 'error') throw new Error(`expected error, got ${r.status}`);
-      if (!/unavailable|No files were changed/.test(r.message ?? '')) throw new Error('error message not clear: ' + r.message);
+      if (!/unavailable|did not apply edits/.test(r.message ?? '')) throw new Error('error message not clear: ' + r.message);
       if (after !== before) throw new Error('workspace changed despite model failure');
       if (r.attempts < 2) throw new Error('expected retries, attempts=' + r.attempts);
     }
@@ -152,7 +182,7 @@ async function scenarioResilience(withFallback: boolean): Promise<void> {
 }
 
 async function scenarioCancel(): Promise<void> {
-  const s = await setup('accept-all', 'mock/mock-coder');
+  const s = await setup('accept-all', MODEL_OK);
   try {
     const target = path.join(s.repo, 'src/flask/helpers.py');
     const before = fs.readFileSync(target, 'utf8');

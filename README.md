@@ -124,6 +124,21 @@ Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor te
 Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
 A complete real-model run and the recorded demo still need verification.
 
+## Actual editor regression tests
+
+With TrueForge running locally and VS Code installed, run `npm run test:editor`. It opens an isolated Extension
+Development Host with a disposable workspace and a local scripted model. Five scenarios exercise the real
+CodeLens commands, partial hunk application, WorkspaceEdit undo, cancellation, rejecting all hunks, and closing
+the diff. These are actual VS Code APIs, not the unit tests' mocked editor module. No paid model or credentials
+are needed. The test runner does not alter your normal editor settings or project files.
+
+The server defaults to `http://127.0.0.1:8790`; override it with `ANVIL_TEST_TRUEFORGE_URL`. On non-macOS systems,
+put `code` on PATH or set `ANVIL_CODE_BIN`. Passing results are saved to `output/verification/editor-results.json`; failed runs retain the printed temporary workspace for diagnostics.
+Mock endpoints use dynamically assigned ports and unique provider names so they cannot reuse an unrelated server.
+
+**Anvil: Run Workspace Task** starts a task from the command palette; **Anvil: New Chat** starts a fresh session
+when no task is running. Both use the same reviewed tool flow as the sidebar.
+
 ## Submission preparation
 
 `npm run check` runs typecheck, tests and the build. `npm run package` builds the extension and creates
