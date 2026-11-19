@@ -133,7 +133,7 @@
       {
         "command": "anvil.cancel",
         "key": "escape",
-        "when": "anvil.turnRunning && !editorHasSelection && !inlineSuggestionVisible"
+        "when": "anvil.turnRunning && !inlineSuggestionVisible"
       }
     ],
     "viewsContainers": {
