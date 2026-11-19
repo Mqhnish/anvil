@@ -8,7 +8,10 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const base = process.env.ANVIL_TEST_TRUEFORGE_URL ?? 'http://127.0.0.1:8790';
-const code = process.env.ANVIL_CODE_BIN ?? (process.platform === 'darwin' ? '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code' : 'code');
+// On Windows `code` is a .cmd wrapper that spawn() cannot start; launch Code.exe directly, as VS Code's own test runner does.
+const defaultCode = process.platform === 'darwin' ? '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'
+  : process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Microsoft VS Code', 'Code.exe') : 'code';
+const code = process.env.ANVIL_CODE_BIN ?? defaultCode;
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'anvil-editor-'));
 const workspace = path.join(temp, 'workspace');
 const provider = 'editor-test-' + path.basename(temp).slice(-6).toLowerCase();

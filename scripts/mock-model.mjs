@@ -61,11 +61,14 @@ function policy(messages, tools) {
     return { content: 'Done: ' + lastToolText.split('\n')[0] };
   }
 
-  if (!calledNames.includes('assemble_context') && !lastToolText.startsWith('Context pack')) {
+  // Anvil may send its context pack with the first message; like a real model, use it instead of rebuilding it.
+  const prePack = userText.includes('Anvil assembled this context pack') ? userText.slice(userText.indexOf('Context pack')) : '';
+  if (!prePack && !calledNames.includes('assemble_context') && !lastToolText.startsWith('Context pack')) {
     return { tool_calls: [via('assemble_context', { task: userText })] };
   }
   const packMsg = toolMsgs.find(m => String(m.content).startsWith('Context pack'));
-  const firstFile = packMsg ? (String(packMsg.content).match(/^1\. (\S+)/m) || [])[1] : undefined;
+  const packText = packMsg ? String(packMsg.content) : prePack;
+  const firstFile = packText ? (packText.match(/^1\. (\S+)/m) || [])[1] : undefined;
   if (firstFile && !calledNames.includes('read_file') && !lastToolText.startsWith(firstFile)) {
     return { content: `I will edit ${firstFile} (chosen by the context pack because it ranked first).`, tool_calls: [via('read_file', { path: firstFile, start_line: 1, end_line: multiHunk ? 100 : 5 })] };
   }
