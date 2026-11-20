@@ -6,7 +6,7 @@ Tokenisers, Nanyang Technological University: Mohnish Singh Rawat (@Mqhnish, tea
 
 Repository: https://github.com/Mqhnish/anvil
 
-Demo video (3:24): VIDEO_LINK
+Demo video (3:59): VIDEO_LINK
 
 ## 2. Starting point
 
@@ -22,7 +22,7 @@ Tool approval drives review. Before a proposed edit executes, Anvil opens a nati
 
 Cancellation denies pending reviews, revokes approvals, and stops active shell processes and their children (process group on macOS/Linux, process tree on Windows). Accepted changes remain applied. Retry and automatic fallback are available before an edit or command executes. After a side effect, a failure stops with an explanation instead of replaying the request. A provider's per-minute rate limit (HTTP 429) is different: Anvil waits the time the provider asks for, then continues the same TrueForge session with a short continue message, without resending the original task. The model can still choose to repeat a tool call. Some models, especially small local ones, sometimes write a tool call as JSON text instead of calling the tool; Anvil detects this and asks the same session, at most twice, to make the real call. It never executes the text itself, so every action stays inside TrueForge's tool loop and the review.
 
-Four frequent tools are preloaded; the rest use TrueForge's deferred tool loading and are discovered on demand. In the recorded Task B session the agent calls list_tools, then call_tool for assemble_context, which keeps unused tool schemas out of the prompt (visible at 2:09-2:17). The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. Subagents were switched off for the free-tier runs to stay within Gemini's per-minute quota, and no recorded task grew large enough to trigger compaction, so neither appears in the video.
+Four frequent tools are preloaded; the rest use TrueForge's deferred tool loading and are discovered on demand. In the recorded Task B session the agent looks up the command tool only when it needs to run tests, which keeps unused tool schemas out of the prompt (the "deferred loading" rows at 1:57, and the TrueForge session at 2:31-2:46). The agent definition also enables dynamic subagents and context compaction at 60,000 input tokens. Subagents were switched off for the free-tier runs to stay within per-minute rate limits, and no recorded task grew large enough to trigger compaction, so neither appears in the video.
 
 ## 4. How context is selected
 
@@ -36,11 +36,13 @@ The trade-off is speed and explainability versus semantic recall. Retrieval uses
 
 ## 5. Model setup
 
-All provider credentials stay in TrueForge or the git-ignored local configuration. The extension can select any supported configured model, plus a distinct fallback. The example configuration includes OpenAI, Gemini and a local OpenAI-compatible endpoint.
+All provider credentials stay in TrueForge or the git-ignored local configuration. The extension can select any supported configured model, plus a distinct fallback. The example configuration includes OpenAI, Gemini, NVIDIA's OpenAI-compatible API and a local endpoint.
 
-Live rehearsal on 19 November used Google's gemini-3.5-flash-lite through local TrueForge 0.185.1, with subagents off, 4,000- and 8,000-token context budgets and no retries. The user confirmed Free Tier with billing disabled; no paid model was selected. Expected API cost is $0 on that tier, not an independently audited billing measurement. The older gemini-2.5-flash-lite returned unavailable for new users before the switch.
+Rehearsals used Google's gemini-3.5-flash-lite on its free tier, but only about two Task B takes in seven were usable. The recording uses MiniMax M3.1 Flash on NVIDIA's free developer API, added to local TrueForge 0.185.1 as a custom OpenAI-compatible provider, with subagents off and a 4,000-token context budget. No paid model was selected; expected API cost is $0, not an audited figure.
 
-The recorded run used the same model and setup. Task A's edit lists every false value, including the empty string, and FLASK_DEBUG=off and N now read as False. In Task B, Gemini found and edited src/flask/cli.py, tests/test_cli.py and docs/cli.rst without being told the file names. Four diffs were reviewed in one task, and the agent ran the CLI tests itself through an approved command. Mid-task, the free tier returned a 429; Anvil waited and continued the same TrueForge session (visible in the session at 2:09). Afterwards, tests/test_cli.py passed (59 tests), `flask config` printed SECRET_KEY as "***", and `flask --help` lists `config` (run on the same workspace after recording). The context pack in that run ranked cli.py fifth but left it out for budget, and said so; the agent read it next. Other free-tier takes of Task B were not used: one broke an unrelated test, one changed Flask's global JSON encoding to pass its own test, one looped on searches. Task C used a local provider that always answers HTTP 503 as the primary; Anvil retried, then fell back to Gemini automatically. Earlier rehearsals stopped at a plan or hit the 20-iteration limit; the agent instructions and the rate-limit continue path were changed before recording.
+In Task B the context pack ranked 4 files from 128 candidates, led by src/flask/cli.py (3,928 of 4,000 tokens). Without being told any file names, the agent edited cli.py, test_cli.py, docs/cli.rst and docs/api.rst, each reviewed as a diff. NVIDIA's per-minute limit returned 429 several times; Anvil waited and continued the same session each time. Afterwards 62 CLI tests passed, `flask config` printed SECRET_KEY as "***", and `flask --help` listed `config`. Task C's primary was a provider that refuses connections; Anvil fell back to MiniMax automatically.
+
+Task B took three takes: the script that clicks Allow on approval cards failed in the first two. In the third the pytest card waited nine minutes before it was clicked, and the agent's later command calls failed. The video cuts both stretches and labels them; the final checks were run by the recording driver.
 
 ## 6. Scorecard
 
@@ -48,14 +50,14 @@ Timestamps refer to the demo video. In the recording, a scripted Extension Host 
 
 | Criterion | Evidence | Video |
 |---|---|---|
-| A1 Inline edit | Task A on Gemini: diff with per-hunk CodeLens, accept, then off/N → False and 1 → True | 0:15-0:32 |
-| A2 Agent mode | Task B: no file names given; the agent edits cli.py, its test and docs; 59 tests pass; secrets masked | 1:20-2:09 |
-| A3 Streaming and cancellation | Esc mid-generation cancels in under 0.3 s; git status stays clean | 2:53-3:00 |
-| B1 Context assembly | Context pack with reasons, 3,881 of 4,000 tokens, skipped files named; then targeted reads | 1:26-1:33 |
-| B2 Diff safety | One diff, three hunks: one accepted, two rejected individually, only the accepted lines land; C rejected; D undone byte for byte | 0:39-1:11, 2:24-2:46, 3:00-3:17 |
-| B3 Resilience | 503 primary → retry → automatic fallback, no user action (C); free-tier 429 → wait and continue (B) | 2:24-2:46, 2:09 |
-| B4 TrueForge depth | Session with every tool call; deferred tool loading (list_tools → call_tool assemble_context); approval pauses drive review | 2:09-2:17 |
-| C1 Video | 3:24 screen recording at 30 fps, played at 1.25×; context cards and step captions; long model waits sped up further and labelled; no cuts between instruction and diff | full |
+| A1 Inline edit | Task A: diff, accept, then off/N → False and 1 → True. Per-hunk take: three hunks, one accepted, two rejected | 0:08-0:36, 0:36-1:10 |
+| A2 Agent mode | Task B: no file names given; the agent edits cli.py, test_cli.py, cli.rst and api.rst; 62 tests pass; secrets masked | 1:10-2:31 |
+| A3 Streaming and cancellation | Tokens and tool calls stream into the panel; Esc mid-generation cancels in about 0.25 s; git status stays clean | 1:19-2:31, 3:19-3:27 |
+| B1 Context assembly | Context pack: 4 files from 128 candidates, a reason for each, 3,928 of 4,000 tokens, skipped files named; then targeted reads | 1:19-1:43 |
+| B2 Diff safety | Per-hunk accept and reject, only accepted lines land; C rejected, tree clean; D undone byte for byte | 0:46-1:10, 3:02-3:15, 3:39-3:53 |
+| B3 Resilience | Primary offline → automatic fallback, no user action (C); per-minute 429 → wait and continue (B) | 2:55-3:02, 1:27-1:43 |
+| B4 TrueForge depth | Approval pauses drive review; command tool loaded on demand (deferred loading); Allow card; session with every tool call in TrueForge | 1:43-2:13, 2:31-2:46 |
+| C1 Video | 3:59 real screen recordings narrated by the three team members; model waits sped up and labelled; two labelled cuts in B, both after the diffs; no cut between instruction and diff | full |
 | C2 Write-up | This document | - |
 
 ## 7. Tools used
@@ -66,6 +68,6 @@ AI coding assistants: Claude Code (Anthropic) was used throughout for implementa
 
 ## 8. Known limitations and next steps
 
-The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The recorded demo ran real models in a real VS Code window, with a scripted driver standing in for the person at the keyboard. Recording surfaced four bugs, fixed before the final takes: Esc did not cancel while text was selected; neighbouring changes merged into one hunk, so they could not be decided separately; panel cards shrank to thin lines once the log overflowed; and the context pack depended on the model calling the tool. The Task B take in the video predates the panel fix, so its panel rows appear squashed. The free-tier model also needed several takes for Task B.
+The automated suite and headless e2e verify extension behavior with scripted responses. Five actual VS Code Extension Host scenarios pass: partial CodeLens acceptance, undo, cancellation, a subsequent task and closing a diff. The recorded demo ran real models in a real VS Code window, with a scripted driver standing in for the person at the keyboard. Recording surfaced four bugs, fixed before the final takes: Esc did not cancel while text was selected; neighbouring changes merged into one hunk, so they could not be decided separately; panel cards shrank to thin lines once the log overflowed; and the context pack depended on the model calling the tool. An approval left pending for minutes can leave later command calls failing.
 
 Reviews apply per file rather than as a transaction across an entire turn. Cancellation is not a rollback. User-approved commands run on the host, outside an OS sandbox. File-tool path validation does not constrain arbitrary shell commands. Retrieval is lexical; symbol lookup has a regex fallback. Next improvements would prioritize real-model evaluation, a cross-file review view, and richer subagent transcripts.

@@ -229,3 +229,22 @@ Local model check (not a recorded run): `qwen2.5-coder:7b` (16k context) through
 took 0.5-4 minutes. The model wrote `propose_edit` as a JSON code block in all three replies; Anvil detected it and
 nudged twice, then stopped. No edit was made and the Flask copy was untouched. This model cannot make native tool
 calls through Ollama's OpenAI endpoint, so it cannot drive Anvil. Setup notes for local models are in the README.
+
+## 20 November 2026: re-recorded demo on MiniMax M3.1 Flash (NVIDIA)
+
+Model: `nvidia/minimax-m3-1-flash` (NVIDIA's free developer API, custom provider in TrueForge), context budget 4,000,
+subagents off. Each take ran in a fresh VS Code window on a fresh clone of Flask 3.1.3, recorded with macOS screencapture.
+
+- A: diff, accept; FLASK_DEBUG=off → False, N → False, 1 → True.
+- Per-hunk: 3 hunks, hunk 1 accepted, 2 and 3 rejected; only get_debug_flag lines landed.
+- B (third take): context pack 4 files from 128 candidates, 3,928 of 4,000 tokens, cli.py first. Edited cli.py,
+  test_cli.py, docs/cli.rst, docs/api.rst. Several per-minute 429s, each waited out in the same session. Afterwards
+  `pytest tests/test_cli.py` → 62 passed; `flask config` prints SECRET_KEY "***"; `config` listed in `flask --help`.
+  Takes 1 and 2 failed because the recording script's approval clicker could not reach the panel webview (fixed: it
+  now attaches to the webview iframe and looks inside `#active-frame`). In take 3 the pytest card waited ~9 minutes
+  before the fixed clicker ran; after that the agent's later command calls failed and it reported that.
+- C: primary `demo-offline/primary` refused connections; automatic fallback to MiniMax; diff rejected; tree clean.
+- D: Esc cancelled in ~0.25 s, tree clean; second run accepted, then Undo restored helpers.py byte for byte.
+
+Final cut: 3:58 (`tmp/film/assemble3.py`), real recordings only; waits sped up and labelled; two labelled cuts in B,
+both after the diffs.
