@@ -38,17 +38,14 @@ Always run `npm run typecheck && npm test` before committing; run `npm run e2e` 
 - `src/host/` — `WorkspaceHost` interface with `VsCodeHost` and `HeadlessHost`; everything above the host is testable
   without VS Code (`dist/headless.js`, `dist/e2e.js`).
 
-## Current state (19 Nov 2026)
+## Current state (20 Nov 2026)
 Working and verified headlessly: TrueForge session/turn streaming, MCP registration + tool calls, approval-driven
-per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 63 passing, including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Five actual VS Code Extension Host scenarios now verify per-hunk commands, undo, review cancellation, recovery and diff closing via `npm run test:editor`. Complete real-model Tasks A/B/C and the recording remain pending. **Those need a real-model run on the Flask tasks — see docs/DEMO-SCRIPT.md.**
+per-hunk review path, retry + fallback, clear-error path, cancellation. Automated tests: 80 passing (4 skipped), including MCP integration and mocked editor review/undo; typecheck, build and all five headless e2e scenarios passed. See `docs/TESTLOG.md`. Interactive VS Code smoke checks cover panel rendering, the macOS inline shortcut, native diff proposals, Accept/Reject All, and undo. Five actual VS Code Extension Host scenarios now verify per-hunk commands, undo, review cancellation, recovery and diff closing via `npm run test:editor`. Real-model Tasks A, B and C, plus per-hunk review and cancel/undo, were recorded in VS Code on MiniMax M3.1 Flash (NVIDIA) for the Round 1 submission: video https://youtu.be/Y9m8YrG-_PE, write-up `WRITEUP.md`.
 
 ## Open work, in priority order
-1. Run Tasks A, B, C for real in VS Code with a real model; fix whatever breaks (reviewer, panel, prompt wording in
-   `agent/anvil-agent.json`). Record findings in `docs/TESTLOG.md`.
-2. Record the ≤4-minute demo video (A → B → C, verification on screen, TrueForge session visible during B).
-3. Finish `WRITEUP.md` (8 headings, in order) with real timestamps; export to PDF (`docs/` has instructions).
-4. Polish completed: setup/empty state, native-theme panel, accessible cards, draft preservation, webview readiness, command allowlist, CodeLens default, isolated VSIX install and clean-source package. Maintain these checks when editing the UI.
-5. Nice-to-have: show sub-agent threads more richly; `find_symbols` via language server when available.
+Round 1 materials are final. If shortlisted, the live call repeats Task A on the organisers' model, so keep Anvil model-agnostic.
+1. Keep `npm run check` green and README setup steps true from a clean clone.
+2. Nice-to-have: show sub-agent threads more richly; `find_symbols` via language server when available; a cross-file review view.
 
 ## Conventions
 - TypeScript strict, no `any` unless interfacing with untyped SDK bits; small pure modules with unit tests.

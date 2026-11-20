@@ -28,7 +28,9 @@ def footer(canvas, doc):
     canvas.drawRightString(A4[0]-42, 26, str(doc.page))
 
 def paragraph(text, style=body):
-    return Paragraph(escape(text), style)
+    # Escape first, then turn bare URLs into clickable links.
+    marked = re.sub(r'(https?://[^\s<]+[^\s<.,;:)])', r'<link href="\1" color="#1769aa">\1</link>', escape(text))
+    return Paragraph(marked, style)
 
 text = (ROOT / 'WRITEUP.md').read_text()
 sections = re.split(r'^## ', text, flags=re.M)[1:]

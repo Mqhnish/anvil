@@ -3,25 +3,23 @@
 Official requirements checked on 19 November: [Techfest Forge-a-thon](https://techfest.org/competitions/forge-a-thon).
 Round 1 is due **20 November 2026, 23:59 IST**, equivalent to **21 November 2026, 02:29 Singapore time**.
 The official page requires a public repository, a 1-3-page PDF and a public demo video of at most four minutes.
-GitHub metadata checked on 19 November still marks `Mqhnish/anvil` private. Make the visibility decision explicitly before submission; it has not been changed automatically.
 
-## Prepared
+## Round 1 submission
 
-- Installable `anvil-0.1.0.vsix`, built by `npm run package`; installed and recognized in an isolated VS Code profile.
-- Reproducible npm lockfile, `npm run check`, and a runtime-only package allowlist.
-- Setup guidance in the panel, native-theme styling, accessible controls, diff CodeLens enabled by default.
-- Draft write-up with explicit evidence status and a click-by-click demo script.
-- Automated tests and headless TrueForge scenarios; actual VS Code smoke results in `TESTLOG.md`.
+- Repository, public: https://github.com/Mqhnish/anvil
+- Demo video, 3:59, narrated: https://youtu.be/Y9m8YrG-_PE
+- Write-up: `WRITEUP.md`, exported to a 3-page PDF with `scripts/export-writeup.py`
 
-## Finish before submitting
+The video was recorded in a real VS Code window on MiniMax M3.1 Flash through NVIDIA's free developer API,
+configured in local TrueForge. Per-take results are in `TESTLOG.md`; the timed narration is in `VOICEOVER.md`.
+No paid model was used. Before submission the full git history was checked for API keys and none were found;
+provider keys live only in the git-ignored `trueforge/models.local.json`.
 
-1. Follow `FREE-MODEL-SETUP.md`: use an eligible Gemini Free Tier project with billing disabled and `trueforge/models.free.example.json`. No paid provider is authorized for the current submission. Keep keys local and off screen; stop if payment is required. For Task C, the guide describes a local failing primary with the real free model as fallback.
-2. Select both models in Anvil. Run Tasks A, B and C from `DEMO-SCRIPT.md` using the pinned Flask checkout. Verify outputs, tests, review and undo. For Task B, name no files in the instruction and demonstrate at least three changed files.
-3. Rehearse individual hunk Accept/Reject and cancellation for the video. Five real Extension Host scenarios now verify partial hunk acceptance, undo, cancellation, recovery and closing a diff. Run `npm run test:editor` against a local TrueForge server to repeat those checks. If per-hunk controls are missing, check `diffEditor.codeLens` (Anvil enables its default; an explicit user setting can override it).
-4. Record the required <=4-minute video. Keep the instruction-to-diff interval continuous as the demo script specifies. Show the context card, verification commands and TrueForge session. Hide credentials.
-5. Replace the pending live-model/cost/video fields and add scorecard timestamps in `WRITEUP.md`. Regenerate its 1-3-page PDF. The current PDF is labelled a review draft and is not evidence of a completed demo.
-6. Verify repo, video and PDF links in a signed-out browser. The checklist calls for public accessibility; changing repository visibility and uploading the final submission remain team-leader actions.
-7. Confirm the deadline and upload requirements in the current organiser portal, then submit the correct commit and files.
+## Final checks before uploading
+
+1. Open the repository, video and PDF links in a signed-out browser window.
+2. Confirm the deadline and upload fields in the organiser portal (team leader only).
+3. Submit the video link, repository URL and PDF.
 
 ## Reproduce the software checks
 
@@ -36,8 +34,8 @@ npm run e2e
 npm run test:editor  # installed VS Code required
 ```
 
-The e2e and editor suites allocate their own mock ports and isolated provider names. `ANVIL_TEST_TRUEFORGE_URL` overrides the editor suite server URL; `ANVIL_CODE_BIN` selects a different VS Code CLI. It tests temporary copies of Flask. Real-model runs may incur API charges; no live-model result or cost has been claimed.
+The e2e and editor suites allocate their own mock ports and isolated provider names. `ANVIL_TEST_TRUEFORGE_URL` overrides the editor suite server URL; `ANVIL_CODE_BIN` selects a different VS Code CLI. It tests temporary copies of Flask. Real-model runs may incur API charges on paid projects.
 
 ## PDF export
 
-`python3 scripts/export-writeup.py` writes `output/pdf/anvil-writeup.pdf` using ReportLab. Use the bundled Python runtime or install ReportLab in a virtual environment. Replace `VIDEO_LINK` in `WRITEUP.md` before exporting, and check the PDF is 1-3 pages.
+`python3 scripts/export-writeup.py` writes `output/pdf/anvil-writeup.pdf` using ReportLab. Use the bundled Python runtime or install ReportLab in a virtual environment. Check the PDF is 1-3 pages after any edit.

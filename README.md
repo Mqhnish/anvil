@@ -137,7 +137,8 @@ them. It is not used for the demo video's model.
 Latest verification: [docs/TESTLOG.md](docs/TESTLOG.md). The automated editor tests use VS Code API doubles;
 Interactive smoke checks also cover the panel, inline shortcut, accept/reject and undo in VS Code.
 Live Gemini rehearsals verified automatic fallback, 14 inline behavior checks and resumption after a real
-56-second quota wait. The inline docstring missed one edge case. See the test log for Task B and recording status.
+56-second quota wait. The inline docstring missed one edge case. The demo video was recorded on MiniMax M3.1 Flash
+through NVIDIA's free API; per-take results are in the test log.
 
 ## Opt-in Free Tier rehearsal
 
@@ -199,7 +200,7 @@ Select a model, describe a task or choose an example prompt. The draft stays in 
 Per-hunk controls use `diffEditor.codeLens`, enabled by default; an explicit user setting can override it.
 Anvil requires a trusted local workspace because approved commands run on the host.
 
-See [the submission handoff](docs/SUBMISSION-CHECKLIST.md) for the remaining real-model, video and PDF steps.
+[The submission handoff](docs/SUBMISSION-CHECKLIST.md) lists the Round 1 submission and how to reproduce the checks.
 `WRITEUP.md` is the source of the submitted PDF write-up; `python3 scripts/export-writeup.py` regenerates it.
 
 ## Fixed tasks (Round 1)

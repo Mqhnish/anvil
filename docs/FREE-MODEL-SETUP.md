@@ -23,7 +23,7 @@ OpenCode Zen's `-free` models are not usable here: its API answered every reques
 
 ## Failure demonstration without a second paid provider
 
-For Task C, temporarily use the local failing scripted provider described in `DEMO-SCRIPT.md` as primary and the working Free Tier Gemini model as fallback. That demonstrates a failed endpoint followed by a real-model response without paid API access. Restore Gemini as primary afterward. A headless rehearsal verified the automatic switch from a local 503 to Gemini and the resulting reviewed edit. Its docstring missed the empty-string case. The editor recording is still pending.
+For Task C, temporarily use the local failing scripted provider described in `DEMO-SCRIPT.md` as primary and the working Free Tier Gemini model as fallback. That demonstrates a failed endpoint followed by a real-model response without paid API access. Restore Gemini as primary afterward. A headless rehearsal verified the automatic switch from a local 503 to Gemini and the resulting reviewed edit. Its docstring missed the empty-string case. The recorded video instead used a primary that refuses connections, with NVIDIA's MiniMax M3.1 Flash as the fallback.
 
 ## Important distinction
 
