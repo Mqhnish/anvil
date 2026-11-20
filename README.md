@@ -2,6 +2,8 @@
 
 Team **Tokenisers** · TrueFoundry Forge-a-thon, Techfest 2026-27, IIT Bombay
 
+Demo video (3:59): https://youtu.be/Y9m8YrG-_PE
+
 Anvil is a VS Code extension whose agent loop runs entirely on [TrueForge](https://github.com/truefoundry/trueforge).
 VS Code is a *client* of a TrueForge agent: it opens sessions, streams turns, and exposes the editor to the agent as
 MCP tools. TrueForge decides what to read and change; Anvil decides what the model sees (budgeted context

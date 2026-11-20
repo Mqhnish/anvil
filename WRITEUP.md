@@ -6,7 +6,7 @@ Tokenisers, Nanyang Technological University: Mohnish Singh Rawat (@Mqhnish, tea
 
 Repository: https://github.com/Mqhnish/anvil
 
-Demo video (3:59): VIDEO_LINK
+Demo video (3:59): https://youtu.be/Y9m8YrG-_PE
 
 ## 2. Starting point
 
