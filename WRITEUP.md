@@ -57,7 +57,7 @@ Timestamps refer to the demo video. In the recording, a scripted Extension Host 
 | B2 Diff safety | Per-hunk accept and reject, only accepted lines land; C rejected, tree clean; D undone byte for byte | 0:46-1:10, 3:02-3:15, 3:39-3:53 |
 | B3 Resilience | Primary offline → automatic fallback, no user action (C); per-minute 429 → wait and continue (B) | 2:55-3:02, 1:27-1:43 |
 | B4 TrueForge depth | Approval pauses drive review; command tool loaded on demand (deferred loading); Allow card; session with every tool call in TrueForge | 1:43-2:13, 2:31-2:46 |
-| C1 Video | 3:59 real screen recordings narrated by the three team members; model waits sped up and labelled; two labelled cuts in B, both after the diffs; no cut between instruction and diff | full |
+| C1 Video | 3:59 narrated screen recordings; waits sped up and labelled; two labelled cuts in B, after the diffs; no cut between instruction and diff | full |
 | C2 Write-up | This document | - |
 
 ## 7. Tools used
